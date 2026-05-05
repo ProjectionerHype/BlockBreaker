@@ -1647,70 +1647,62 @@ export function BlockBreaker() {
           style={{ display: "block", width: "100%", height: "100%", imageRendering: "pixelated" }}
         />
 
-        {/* ── HUD bar ── */}
+        {/* ── HUD bar — single row, no background ── */}
         {showHUD && (
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0,
             display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "9px 14px 8px",
-            background: "rgba(0,2,14,0.88)",
-            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            padding: "7px 12px",
             pointerEvents: "none", userSelect: "none",
           }}>
             {/* Score — left */}
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", marginBottom: 1 }}>Score</div>
-              <div style={{ fontSize: 21, fontWeight: 800, color: "#ffffff", lineHeight: 1, letterSpacing: "-0.01em" }}>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 6 }}>
+              <span style={{ fontSize: 17, fontWeight: 800, color: "#fff", lineHeight: 1, textShadow: "0 0 8px rgba(0,200,255,0.5)" }}>
                 {score.toLocaleString()}
-              </div>
-              <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.22)", marginTop: 1 }}>
-                Best <span style={{ color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>{hiScore.toLocaleString()}</span>
-              </div>
+              </span>
+              <span style={{ fontSize: 9, color: "rgba(255,255,255,0.28)", fontWeight: 500 }}>
+                best {hiScore.toLocaleString()}
+              </span>
             </div>
 
-            {/* Center — level name + progress dots */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.2em", color: "rgba(255,255,255,0.85)", textTransform: "uppercase", textShadow: "0 0 12px rgba(180,120,255,0.45)", marginBottom: 5 }}>
+            {/* Center — level name + progress dots inline */}
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", color: "rgba(255,255,255,0.8)", textTransform: "uppercase", textShadow: "0 0 10px rgba(180,120,255,0.4)" }}>
                 {LEVELS[Math.min(level - 1, LEVELS.length - 1)]?.name}
-              </div>
+              </span>
               <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
                 {Array.from({ length: LEVELS.length }).map((_, i) => (
                   <div key={i} style={{
-                    width: i === level - 1 ? 16 : 4, height: 4, borderRadius: 3,
-                    background: i < level ? (i === level - 1 ? "#00f5ff" : "rgba(0,245,255,0.4)") : "rgba(255,255,255,0.1)",
-                    boxShadow: i === level - 1 ? "0 0 7px #00f5ff" : "none",
+                    width: i === level - 1 ? 14 : 3, height: 3, borderRadius: 3,
+                    background: i < level ? (i === level - 1 ? "#00f5ff" : "rgba(0,245,255,0.4)") : "rgba(255,255,255,0.12)",
+                    boxShadow: i === level - 1 ? "0 0 6px #00f5ff" : "none",
                     transition: "width 0.3s ease",
                   }} />
                 ))}
               </div>
-              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", marginTop: 4 }}>LVL {level} / {LEVELS.length}</div>
             </div>
 
             {/* Lives + sound — right */}
-            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <div style={{ display: "flex", gap: 4, alignItems: "center" }}>
+                {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
+                  <svg key={i} width="11" height="11" viewBox="0 0 24 24" fill="rgba(255,255,255,0.75)">
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                ))}
+              </div>
               <button
                 onClick={toggleSound}
                 style={{
                   pointerEvents: "auto",
                   background: "transparent", border: "none", cursor: "pointer",
-                  padding: "2px 4px", borderRadius: 6,
-                  color: uiState.sound ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.2)",
-                  fontSize: 14, lineHeight: 1,
+                  padding: "2px", lineHeight: 1, fontSize: 13,
+                  color: uiState.sound ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.18)",
                 }}
-                title={uiState.sound ? "Mute sound" : "Enable sound"}
+                title={uiState.sound ? "Mute" : "Unmute"}
               >
                 {uiState.sound ? "🔊" : "🔇"}
               </button>
-              <div>
-                <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", marginBottom: 3 }}>Lives</div>
-                <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                  {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
-                    <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill="#fff" opacity={0.9}>
-                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                    </svg>
-                  ))}
-                </div>
-              </div>
             </div>
           </div>
         )}
