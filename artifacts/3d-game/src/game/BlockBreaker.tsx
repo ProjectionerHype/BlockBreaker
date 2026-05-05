@@ -177,11 +177,26 @@ export function BlockBreaker() {
   // background stars
   const starsRef = useRef<{ x: number; y: number; r: number; brightness: number; speed: number }[]>([]);
 
+  // streak tracking
+  const streakRef = useRef<number>((() => {
+    const saved = localStorage.getItem("bb-streak");
+    const lastDate = localStorage.getItem("bb-streak-date");
+    if (!saved || !lastDate) return 0;
+    const today = new Date().toDateString();
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    if (lastDate === today || lastDate === yesterday) return parseInt(saved, 10);
+    return 0;
+  })());
+  const diedOnLevelRef = useRef(0);
+  const achievedRef = useRef<Set<string>>(new Set());
+
   // React state (for UI overlays only)
   const [uiState, setUiState] = useState<{
     gs: GameState; level: number; score: number; lives: number; hiScore: number; combo: number;
-  }>({ gs: "menu", level: 1, score: 0, lives: 3, hiScore: 0, combo: 0 });
+    toast: string; streak: number;
+  }>({ gs: "menu", level: 1, score: 0, lives: 3, hiScore: 0, combo: 0, toast: "", streak: streakRef.current });
 
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
 
@@ -310,7 +325,8 @@ export function BlockBreaker() {
 
   // ── start level ─────────────────────────────────────────────────────────────
   const startLevel = useCallback((lvlIdx: number) => {
-    blocksRef.current = buildLevel(lvlIdx);
+    const safeIdx = Math.max(0, Math.min(lvlIdx, LEVELS.length - 1));
+    blocksRef.current = buildLevel(safeIdx);
     ballsRef.current = [makeBall(GAME_W / 2, PADDLE_Y - BALL_RADIUS - 2)];
     particlesRef.current = [];
     powerUpsRef.current = [];
@@ -325,12 +341,40 @@ export function BlockBreaker() {
     setUiState(u => ({ ...u, gs: "playing", level: lvlIdx + 1 }));
   }, []);
 
-  const startGame = useCallback(() => {
-    levelRef.current = 0;
+  const showToast = useCallback((msg: string) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setUiState(u => ({ ...u, toast: msg }));
+    toastTimerRef.current = setTimeout(() => setUiState(u => ({ ...u, toast: "" })), 2000);
+  }, []);
+
+  const startGame = useCallback((fromLevel?: number) => {
+    const startLvl = fromLevel ?? Math.floor(Math.random() * LEVELS.length);
+    // update streak
+    const today = new Date().toDateString();
+    const lastDate = localStorage.getItem("bb-streak-date");
+    const yesterday = new Date(Date.now() - 86400000).toDateString();
+    let newStreak = streakRef.current;
+    if (lastDate !== today) {
+      newStreak = lastDate === yesterday ? newStreak + 1 : 1;
+      streakRef.current = newStreak;
+      localStorage.setItem("bb-streak", String(newStreak));
+      localStorage.setItem("bb-streak-date", today);
+    }
+    achievedRef.current = new Set();
+    levelRef.current = startLvl;
     livesRef.current = 3;
     scoreRef.current = 0;
-    startLevel(0);
-    setUiState(u => ({ ...u, score: 0, lives: 3, hiScore: hiScoreRef.current }));
+    startLevel(startLvl);
+    setUiState(u => ({ ...u, score: 0, lives: 3, hiScore: hiScoreRef.current, streak: newStreak }));
+  }, [startLevel, showToast]);
+
+  const startRevenge = useCallback(() => {
+    achievedRef.current = new Set();
+    levelRef.current = diedOnLevelRef.current;
+    livesRef.current = 3;
+    scoreRef.current = 0;
+    startLevel(diedOnLevelRef.current);
+    setUiState(u => ({ ...u, score: 0, lives: 3, hiScore: hiScoreRef.current, streak: streakRef.current }));
   }, [startLevel]);
 
   // ── game logic ─────────────────────────────────────────────────────────────
@@ -490,6 +534,13 @@ export function BlockBreaker() {
             const comboBonus = Math.max(0, comboRef.current - 1) * 5;
             scoreRef.current += base + comboBonus;
             if (comboRef.current >= 2) Audio.combo(comboRef.current);
+            // achievement toasts for combo milestones
+            const milestones: Record<number, string> = { 3: "✦ TRIPLE COMBO!", 5: "🔥 5× COMBO!", 10: "⚡ 10× COMBO!", 20: "★ UNSTOPPABLE!" };
+            const achieveKey = `combo-${comboRef.current}`;
+            if (milestones[comboRef.current] && !achievedRef.current.has(achieveKey)) {
+              achievedRef.current.add(achieveKey);
+              showToast(milestones[comboRef.current]);
+            }
 
             // explosive
             if (blk.type === "explosive") {
@@ -559,6 +610,7 @@ export function BlockBreaker() {
       shake.power = 18;
       Audio.lifeLost();
       if (livesRef.current <= 0) {
+        diedOnLevelRef.current = levelRef.current;
         gsRef.current = "gameOver";
         if (scoreRef.current > hiScoreRef.current) {
           hiScoreRef.current = scoreRef.current;
@@ -618,6 +670,14 @@ export function BlockBreaker() {
         Audio.powerUp();
         applyPowerUp(pu2.type);
         spawnParticles(particlesRef.current, pu2.x, pu2.y, POWERUP_COLORS[pu2.type].bg, 10);
+        // achievement toast
+        const toastMap: Partial<Record<PowerUpType, string>> = {
+          multiBall: "🔥 MULTIBALL!", fireball: "🔥 FIREBALL!", laser: "⚡ LASER!",
+          extraLife: "❤ EXTRA LIFE!", slowMo: "⏱ SLOW-MO!", widePaddle: "↔ WIDE PADDLE!",
+          magnetPaddle: "🧲 MAGNET!",
+        };
+        const msg = toastMap[pu2.type];
+        if (msg) showToast(msg);
       }
 
       if (pu2.y - pu2.radius > GAME_H) pu2.alive = false;
@@ -678,7 +738,7 @@ export function BlockBreaker() {
       score: scoreRef.current,
       combo: comboRef.current,
     }));
-  }, [startLevel, fireLaser]);
+  }, [startLevel, fireLaser, showToast]);
 
   // ── renderer ───────────────────────────────────────────────────────────────
   const render = useCallback((ctx: CanvasRenderingContext2D, t: number) => {
@@ -1087,7 +1147,7 @@ export function BlockBreaker() {
 
   // ── overlay UI ─────────────────────────────────────────────────────────────
   const renderOverlay = () => {
-    const { gs, score, hiScore, level } = uiState;
+    const { gs, score, hiScore, level, streak = 0, toast } = uiState;
 
     if (gs === "menu") {
       return (
@@ -1112,23 +1172,29 @@ export function BlockBreaker() {
             </p>
           </div>
 
-          {/* hi-score chip */}
-          <div style={{
-            margin: "18px 0 28px",
-            padding: "6px 20px",
-            borderRadius: 99,
-            background: "rgba(255,215,0,0.07)",
-            border: "1px solid rgba(255,215,0,0.25)",
-            fontSize: 13,
-            color: "rgba(255,255,255,0.5)",
-            letterSpacing: "0.08em",
-          }}>
-            BEST &nbsp;<span style={{ color: "#ffd700", fontWeight: 700 }}>{hiScore.toLocaleString()}</span>
+          {/* hi-score + streak row */}
+          <div style={{ margin: "18px 0 28px", display: "flex", gap: 10, alignItems: "center", justifyContent: "center" }}>
+            <div style={{
+              padding: "6px 18px", borderRadius: 99,
+              background: "rgba(255,215,0,0.07)", border: "1px solid rgba(255,215,0,0.22)",
+              fontSize: 12, color: "rgba(255,255,255,0.45)", letterSpacing: "0.08em",
+            }}>
+              BEST &nbsp;<span style={{ color: "#ffd700", fontWeight: 700 }}>{hiScore.toLocaleString()}</span>
+            </div>
+            {streak > 1 && (
+              <div style={{
+                padding: "6px 14px", borderRadius: 99,
+                background: "rgba(255,120,0,0.08)", border: "1px solid rgba(255,120,0,0.25)",
+                fontSize: 12, color: "rgba(255,200,100,0.7)", letterSpacing: "0.06em", fontWeight: 600,
+              }}>
+                🔥 {streak}-day streak
+              </div>
+            )}
           </div>
 
           {/* play button */}
           <button
-            onClick={startGame}
+            onClick={() => startGame()}
             style={{
               padding: "14px 52px",
               borderRadius: 12,
@@ -1300,19 +1366,44 @@ export function BlockBreaker() {
                 Best: <span style={{ color: "rgba(0,245,255,0.7)", fontWeight: 600 }}>{hiScore.toLocaleString()}</span>
               </p>
             </div>
+            {/* gap from best */}
+            {hiScore > score && (
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.28)", marginTop: 4 }}>
+                {(hiScore - score).toLocaleString()} pts behind your best
+              </p>
+            )}
+            {score >= hiScore && score > 0 && (
+              <p style={{ fontSize: 11, color: "#ffd700", marginTop: 4 }}>✦ New best!</p>
+            )}
+
+            {/* Revenge button — same level */}
             <button
-              onClick={startGame}
+              onClick={startRevenge}
               style={{
                 display: "block", width: "100%",
                 padding: "13px 0", borderRadius: 10,
                 fontSize: 14, fontWeight: 800, letterSpacing: "0.15em",
                 color: "#fff",
-                background: "linear-gradient(135deg,#ff2244,#cc0022)",
-                boxShadow: "0 0 28px rgba(255,34,68,0.35)",
-                border: "none", cursor: "pointer",
+                background: "linear-gradient(135deg,#ff4400,#cc1100)",
+                boxShadow: "0 0 28px rgba(255,68,0,0.35)",
+                border: "none", cursor: "pointer", marginBottom: 10,
               }}
             >
-              TRY AGAIN
+              ⚡ REVENGE — LEVEL {diedOnLevelRef.current + 1}
+            </button>
+            <button
+              onClick={() => startGame()}
+              style={{
+                display: "block", width: "100%",
+                padding: "12px 0", borderRadius: 10,
+                fontSize: 13, fontWeight: 600, letterSpacing: "0.12em",
+                color: "rgba(255,255,255,0.55)",
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.12)",
+                cursor: "pointer",
+              }}
+            >
+              RANDOM LEVEL
             </button>
           </div>
         </div>
@@ -1398,86 +1489,50 @@ export function BlockBreaker() {
         {showHUD && (
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0,
-            display: "flex", alignItems: "stretch", justifyContent: "space-between",
-            gap: 8,
-            padding: "7px 10px",
-            background: "linear-gradient(180deg,rgba(0,3,18,0.97) 60%,rgba(0,3,18,0) 100%)",
-            borderBottom: "1px solid rgba(0,245,255,0.07)",
-            pointerEvents: "none",
-            userSelect: "none",
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "9px 14px 8px",
+            background: "rgba(0,2,14,0.88)",
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            pointerEvents: "none", userSelect: "none",
           }}>
-
-            {/* ── Score chip ── */}
-            <div style={{
-              display: "flex", alignItems: "center", gap: 10,
-              padding: "4px 14px 4px 10px",
-              borderRadius: 10,
-              background: "rgba(0,245,255,0.06)",
-              border: "1px solid rgba(0,245,255,0.14)",
-            }}>
-              {/* cyan accent bar */}
-              <div style={{ width: 3, height: 28, borderRadius: 2, background: "linear-gradient(180deg,#00f5ff,#0055ff)", boxShadow: "0 0 8px #00f5ff" }} />
-              <div>
-                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.22em", color: "rgba(0,245,255,0.45)", textTransform: "uppercase", lineHeight: 1, marginBottom: 2 }}>Score</div>
-                <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", lineHeight: 1, letterSpacing: "-0.02em", textShadow: "0 0 20px rgba(0,245,255,0.7)" }}>
-                  {score.toLocaleString()}
-                </div>
+            {/* Score — left */}
+            <div>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", marginBottom: 1 }}>Score</div>
+              <div style={{ fontSize: 21, fontWeight: 800, color: "#ffffff", lineHeight: 1, letterSpacing: "-0.01em" }}>
+                {score.toLocaleString()}
+              </div>
+              <div style={{ fontSize: 8.5, color: "rgba(255,255,255,0.22)", marginTop: 1 }}>
+                Best <span style={{ color: "rgba(255,255,255,0.45)", fontWeight: 600 }}>{hiScore.toLocaleString()}</span>
               </div>
             </div>
 
-            {/* ── Center: level name + progress ── */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1 }}>
-              <div style={{
-                fontSize: 10, fontWeight: 800, letterSpacing: "0.2em",
-                textTransform: "uppercase",
-                color: "rgba(255,255,255,0.85)",
-                textShadow: "0 0 12px rgba(180,120,255,0.5)",
-                marginBottom: 5,
-              }}>
+            {/* Center — level name + progress dots */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.2em", color: "rgba(255,255,255,0.85)", textTransform: "uppercase", textShadow: "0 0 12px rgba(180,120,255,0.45)", marginBottom: 5 }}>
                 {LEVELS[Math.min(level - 1, LEVELS.length - 1)]?.name}
               </div>
               <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
                 {Array.from({ length: LEVELS.length }).map((_, i) => (
                   <div key={i} style={{
-                    width: i === level - 1 ? 16 : 4,
-                    height: 4,
-                    borderRadius: 3,
-                    background: i < level
-                      ? (i === level - 1 ? "#00f5ff" : "rgba(0,245,255,0.45)")
-                      : "rgba(255,255,255,0.1)",
-                    boxShadow: i === level - 1 ? "0 0 8px #00f5ff" : "none",
-                    transition: "width 0.35s ease",
+                    width: i === level - 1 ? 16 : 4, height: 4, borderRadius: 3,
+                    background: i < level ? (i === level - 1 ? "#00f5ff" : "rgba(0,245,255,0.4)") : "rgba(255,255,255,0.1)",
+                    boxShadow: i === level - 1 ? "0 0 7px #00f5ff" : "none",
+                    transition: "width 0.3s ease",
                   }} />
                 ))}
               </div>
-              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.22)", letterSpacing: "0.15em", marginTop: 4 }}>
-                LEVEL {level} / {LEVELS.length}
-              </div>
+              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", marginTop: 4 }}>LVL {level} / {LEVELS.length}</div>
             </div>
 
-            {/* ── Lives + best chip ── */}
-            <div style={{
-              display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center",
-              padding: "4px 10px 4px 14px",
-              borderRadius: 10,
-              background: "rgba(255,34,68,0.06)",
-              border: "1px solid rgba(255,34,68,0.14)",
-              gap: 4,
-            }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                <div style={{ display: "flex", gap: 3 }}>
-                  {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
-                    <svg key={i} width="14" height="14" viewBox="0 0 24 24" fill="#ff2244"
-                      style={{ filter: "drop-shadow(0 0 5px #ff2244)" }}>
-                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                    </svg>
-                  ))}
-                </div>
-                <div style={{ width: 3, height: 28, borderRadius: 2, background: "linear-gradient(180deg,#ff2244,#990022)", boxShadow: "0 0 8px #ff2244" }} />
-              </div>
-              {/* best score inline */}
-              <div style={{ fontSize: 9, color: "rgba(255,215,0,0.5)", letterSpacing: "0.1em", fontWeight: 600, textAlign: "right" }}>
-                BEST <span style={{ color: "#ffd700", fontWeight: 800 }}>{hiScore.toLocaleString()}</span>
+            {/* Lives — right */}
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", marginBottom: 3 }}>Lives</div>
+              <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
+                  <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill="#fff" opacity={0.9}>
+                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                  </svg>
+                ))}
               </div>
             </div>
           </div>
@@ -1500,6 +1555,31 @@ export function BlockBreaker() {
 
         {/* Overlay screens */}
         {renderOverlay()}
+
+        {/* Toast notification */}
+        {uiState.toast && (
+          <div style={{
+            position: "absolute", top: "18%", left: "50%",
+            transform: "translateX(-50%)",
+            pointerEvents: "none",
+            background: "rgba(0,0,0,0.75)",
+            backdropFilter: "blur(6px)",
+            border: "1px solid rgba(255,255,255,0.15)",
+            borderRadius: 10,
+            padding: "9px 22px",
+            fontSize: 13,
+            fontWeight: 800,
+            letterSpacing: "0.16em",
+            color: "#fff",
+            textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            boxShadow: "0 0 24px rgba(0,0,0,0.5)",
+            animation: "toast-pop 0.25s ease",
+            zIndex: 50,
+          }}>
+            {uiState.toast}
+          </div>
+        )}
       </div>
     </div>
   );
