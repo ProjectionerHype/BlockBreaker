@@ -1,0 +1,72 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --color-background: hsl(var(--background));
+  --color-foreground: hsl(var(--foreground));
+  --color-border: hsl(var(--border));
+  --color-input: hsl(var(--input));
+  --color-ring: hsl(var(--ring));
+  --color-card: hsl(var(--card));
+  --color-card-foreground: hsl(var(--card-foreground));
+  --color-primary: hsl(var(--primary));
+  --color-primary-foreground: hsl(var(--primary-foreground));
+  --color-secondary: hsl(var(--secondary));
+  --color-secondary-foreground: hsl(var(--secondary-foreground));
+  --color-muted: hsl(var(--muted));
+  --color-muted-foreground: hsl(var(--muted-foreground));
+  --color-accent: hsl(var(--accent));
+  --color-accent-foreground: hsl(var(--accent-foreground));
+  --color-destructive: hsl(var(--destructive));
+  --color-destructive-foreground: hsl(var(--destructive-foreground));
+
+  --font-sans: var(--app-font-sans);
+  --font-mono: var(--app-font-mono);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --background: 230 40% 4%;
+  --foreground: 200 100% 90%;
+  --border: 220 30% 18%;
+  --input: 220 30% 18%;
+  --ring: 190 100% 50%;
+  --card: 225 35% 7%;
+  --card-foreground: 200 80% 85%;
+  --primary: 190 100% 50%;
+  --primary-foreground: 230 40% 4%;
+  --secondary: 270 60% 40%;
+  --secondary-foreground: 200 80% 90%;
+  --muted: 225 25% 14%;
+  --muted-foreground: 220 20% 55%;
+  --accent: 300 80% 50%;
+  --accent-foreground: 0 0% 100%;
+  --destructive: 350 90% 55%;
+  --destructive-foreground: 0 0% 100%;
+  --app-font-sans: 'Inter', system-ui, sans-serif;
+  --app-font-mono: 'Courier New', 'Consolas', monospace;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * { @apply border-border; box-sizing: border-box; }
+  html, body, #root { width: 100%; height: 100%; margin: 0; padding: 0; overflow: hidden; }
+  body { @apply bg-background text-foreground font-sans antialiased; }
+}
+
+@keyframes neon-flicker {
+  0%, 100% { opacity: 1; }
+  92% { opacity: 1; }
+  93% { opacity: 0.8; }
+  94% { opacity: 1; }
+  96% { opacity: 0.9; }
+  97% { opacity: 1; }
+}
+
+.neon-flicker { animation: neon-flicker 4s infinite; }
