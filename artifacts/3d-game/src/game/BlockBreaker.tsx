@@ -185,6 +185,9 @@ export function BlockBreaker() {
   const rafRef = useRef<number | null>(null);
   const lastTimeRef = useRef(0);
 
+  // held arrow keys for keyboard paddle control
+  const keysRef = useRef({ left: false, right: false });
+
   // ── init stars ─────────────────────────────────────────────────────────────
   useEffect(() => {
     const stars = [];
@@ -260,7 +263,10 @@ export function BlockBreaker() {
 
   // keyboard
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.code === "ArrowLeft")  { e.preventDefault(); keysRef.current.left  = true; return; }
+      if (e.code === "ArrowRight") { e.preventDefault(); keysRef.current.right = true; return; }
+
       if (e.code === "Space") {
         e.preventDefault();
         if (gsRef.current === "playing" && !launchedRef.current) {
@@ -273,7 +279,6 @@ export function BlockBreaker() {
           gsRef.current = "paused";
           setUiState(u => ({ ...u, gs: "paused" }));
         }
-        // Auto-fire laser
         if (activePURef.current.laser > 0) fireLaser();
       }
       if (e.code === "KeyP" || e.code === "Escape") {
@@ -281,8 +286,16 @@ export function BlockBreaker() {
         else if (gsRef.current === "paused") { gsRef.current = "playing"; setUiState(u => ({ ...u, gs: "playing" })); }
       }
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    const onKeyUp = (e: KeyboardEvent) => {
+      if (e.code === "ArrowLeft")  keysRef.current.left  = false;
+      if (e.code === "ArrowRight") keysRef.current.right = false;
+    };
+    window.addEventListener("keydown", onKeyDown);
+    window.addEventListener("keyup", onKeyUp);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("keyup", onKeyUp);
+    };
   }, []);
 
   const fireLaser = useCallback(() => {
@@ -341,6 +354,12 @@ export function BlockBreaker() {
     // combo decay
     comboTimerRef.current -= dt;
     if (comboTimerRef.current <= 0) comboRef.current = 0;
+
+    // keyboard paddle movement (arrow keys)
+    const KSPEED = 7;
+    if (keysRef.current.left)  paddleTargetRef.current -= KSPEED;
+    if (keysRef.current.right) paddleTargetRef.current += KSPEED;
+    paddleTargetRef.current = clamp(paddleTargetRef.current, paddleRef.current.w / 2, GAME_W - paddleRef.current.w / 2);
 
     // paddle smooth follow
     const paddle = paddleRef.current;
@@ -899,30 +918,56 @@ export function BlockBreaker() {
 
     // "tap to launch" hint
     if (!launchedRef.current && gsRef.current === "playing") {
+      const pulse = 0.55 + 0.45 * Math.sin(t * 0.0028);
       ctx.save();
-      ctx.globalAlpha = 0.7 + 0.3 * Math.sin(t * 0.003);
-      ctx.font = "bold 15px 'Courier New', monospace";
+      // pill background
+      const hintW = 280, hintH = 30, hintX = GAME_W / 2 - hintW / 2, hintY = PADDLE_Y + 24;
+      ctx.globalAlpha = pulse * 0.85;
+      ctx.fillStyle = "rgba(0,20,40,0.9)";
+      ctx.strokeStyle = "rgba(0,245,255,0.5)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(hintX, hintY, hintW, hintH, 15);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = pulse;
+      ctx.font = "600 12px 'Inter', system-ui, sans-serif";
       ctx.fillStyle = "#00f5ff";
       ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
       ctx.shadowColor = "#00f5ff";
-      ctx.shadowBlur = 12;
-      ctx.fillText("CLICK  OR  PRESS SPACE  TO LAUNCH", GAME_W / 2, PADDLE_Y + 34);
+      ctx.shadowBlur = 8;
+      ctx.fillText("CLICK · SPACE · ← → to move", GAME_W / 2, hintY + hintH / 2);
       ctx.restore();
     }
 
     // combo display
     if (comboRef.current >= 2) {
+      const scale2 = 1 + 0.08 * Math.sin(t * 0.012);
+      const comboX = GAME_W - 14, comboY = 36;
       ctx.save();
-      const scale2 = 1 + 0.1 * Math.sin(t * 0.01);
-      ctx.translate(GAME_W - 10, 12);
+      ctx.translate(comboX, comboY);
       ctx.scale(scale2, scale2);
-      ctx.translate(-(GAME_W - 10), -12);
-      ctx.font = `bold 18px 'Courier New', monospace`;
+      ctx.translate(-comboX, -comboY);
+      // pill bg
+      const label = `×${comboRef.current}  COMBO`;
+      ctx.font = "bold 13px 'Inter', system-ui, sans-serif";
+      const tw = ctx.measureText(label).width;
+      ctx.globalAlpha = 0.92;
+      ctx.fillStyle = "rgba(40,40,0,0.85)";
+      ctx.strokeStyle = "rgba(255,255,0,0.55)";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(comboX - tw - 20, comboY - 12, tw + 24, 24, 12);
+      ctx.fill();
+      ctx.stroke();
+      ctx.globalAlpha = 1;
       ctx.fillStyle = "#ffff00";
       ctx.textAlign = "right";
+      ctx.textBaseline = "middle";
       ctx.shadowColor = "#ffff00";
-      ctx.shadowBlur = 20;
-      ctx.fillText(`✕${comboRef.current} COMBO`, GAME_W - 10, 30);
+      ctx.shadowBlur = 18;
+      ctx.fillText(label, comboX - 6, comboY);
       ctx.restore();
     }
 
@@ -1006,35 +1051,85 @@ export function BlockBreaker() {
     if (gs === "menu") {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-auto select-none">
-          <div className="text-center px-8">
-            <div className="relative mb-4">
-              <h1 className="text-7xl font-black tracking-widest text-transparent bg-clip-text"
-                style={{ backgroundImage: "linear-gradient(90deg,#00f5ff,#ff00ff,#ffff00,#00ff88)", letterSpacing: "0.15em" }}>
-                BLOCK<br />BREAKER
-              </h1>
-              <div className="absolute inset-0 blur-2xl opacity-40"
-                style={{ backgroundImage: "linear-gradient(90deg,#00f5ff,#ff00ff)", WebkitBackgroundClip: "text" }}>
-              </div>
-            </div>
-            <p className="text-cyan-300 text-sm tracking-widest mb-2 font-mono uppercase opacity-80">
+          {/* title */}
+          <div className="mb-1 text-center">
+            <h1
+              className="font-black leading-none tracking-tight"
+              style={{
+                fontSize: "clamp(52px, 10vw, 80px)",
+                background: "linear-gradient(135deg,#00f5ff 0%,#aa44ff 50%,#ff00cc 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+                filter: "drop-shadow(0 0 28px rgba(0,245,255,0.35))",
+                letterSpacing: "-0.02em",
+              }}
+            >
+              BLOCK<br />BREAKER
+            </h1>
+            <p style={{ fontSize: 11, letterSpacing: "0.35em", color: "rgba(0,245,255,0.55)", marginTop: 8, fontWeight: 600, textTransform: "uppercase" }}>
               NEON EDITION
             </p>
-            <p className="text-slate-400 font-mono text-xs mb-8">
-              HIGH SCORE: <span className="text-yellow-300 font-bold">{hiScore.toLocaleString()}</span>
-            </p>
-            <button
-              onClick={startGame}
-              className="px-10 py-4 rounded-lg font-black text-xl tracking-widest uppercase text-black transition-all duration-200 hover:scale-105 active:scale-95"
-              style={{ background: "linear-gradient(90deg,#00f5ff,#0088ff)", boxShadow: "0 0 30px #00f5ff88" }}
-            >
-              PLAY
-            </button>
-            <div className="mt-8 grid grid-cols-2 gap-2 text-left text-xs font-mono text-slate-400 max-w-xs mx-auto">
-              <div className="text-cyan-400">→ MOUSE</div><div>Move paddle</div>
-              <div className="text-cyan-400">→ CLICK / SPACE</div><div>Launch ball</div>
-              <div className="text-cyan-400">→ P / ESC</div><div>Pause</div>
-              <div className="text-cyan-400">→ SPACE</div><div>Fire laser (if active)</div>
-            </div>
+          </div>
+
+          {/* hi-score chip */}
+          <div style={{
+            margin: "18px 0 28px",
+            padding: "6px 20px",
+            borderRadius: 99,
+            background: "rgba(255,215,0,0.07)",
+            border: "1px solid rgba(255,215,0,0.25)",
+            fontSize: 13,
+            color: "rgba(255,255,255,0.5)",
+            letterSpacing: "0.08em",
+          }}>
+            BEST &nbsp;<span style={{ color: "#ffd700", fontWeight: 700 }}>{hiScore.toLocaleString()}</span>
+          </div>
+
+          {/* play button */}
+          <button
+            onClick={startGame}
+            style={{
+              padding: "14px 52px",
+              borderRadius: 12,
+              fontSize: 15,
+              fontWeight: 800,
+              letterSpacing: "0.18em",
+              textTransform: "uppercase",
+              color: "#000",
+              background: "linear-gradient(135deg,#00f5ff,#0066ff)",
+              boxShadow: "0 0 40px rgba(0,200,255,0.45), 0 4px 16px rgba(0,0,0,0.5)",
+              border: "none",
+              cursor: "pointer",
+              transition: "transform 0.15s, box-shadow 0.15s",
+            }}
+            onMouseEnter={e => { (e.target as HTMLElement).style.transform = "scale(1.06)"; }}
+            onMouseLeave={e => { (e.target as HTMLElement).style.transform = "scale(1)"; }}
+          >
+            PLAY NOW
+          </button>
+
+          {/* controls legend */}
+          <div style={{
+            marginTop: 32,
+            display: "grid",
+            gridTemplateColumns: "auto auto",
+            columnGap: 16,
+            rowGap: 6,
+            fontSize: 11,
+            color: "rgba(255,255,255,0.35)",
+            letterSpacing: "0.05em",
+          }}>
+            {[
+              ["MOUSE / ← →", "Move paddle"],
+              ["CLICK · SPACE", "Launch ball"],
+              ["SPACE", "Fire laser"],
+              ["P · ESC", "Pause"],
+            ].map(([k, v]) => (
+              <span key={k} style={{ display: "contents" }}>
+                <span style={{ color: "#00f5ff", fontWeight: 600, textAlign: "right" }}>{k}</span>
+                <span>{v}</span>
+              </span>
+            ))}
           </div>
         </div>
       );
@@ -1043,16 +1138,57 @@ export function BlockBreaker() {
     if (gs === "paused") {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-auto"
-          style={{ background: "rgba(0,0,20,0.75)", backdropFilter: "blur(4px)" }}>
-          <h2 className="text-5xl font-black text-cyan-300 tracking-widest mb-6" style={{ textShadow: "0 0 30px #00f5ff" }}>PAUSED</h2>
-          <button onClick={() => { gsRef.current = "playing"; setUiState(u => ({ ...u, gs: "playing" })); }}
-            className="px-8 py-3 rounded-lg font-bold text-lg tracking-widest text-black transition-all hover:scale-105"
-            style={{ background: "linear-gradient(90deg,#00f5ff,#0088ff)", boxShadow: "0 0 20px #00f5ff66" }}>
-            RESUME
-          </button>
-          <button onClick={startGame} className="mt-3 px-8 py-3 rounded-lg font-bold text-lg tracking-widest text-slate-300 border border-slate-600 hover:border-cyan-400 hover:text-cyan-300 transition-all">
-            RESTART
-          </button>
+          style={{ background: "rgba(2,4,20,0.82)", backdropFilter: "blur(8px)" }}>
+          <div style={{
+            padding: "40px 52px",
+            borderRadius: 20,
+            background: "rgba(0,15,35,0.95)",
+            border: "1px solid rgba(0,245,255,0.18)",
+            boxShadow: "0 0 60px rgba(0,0,0,0.6)",
+            textAlign: "center",
+          }}>
+            <p style={{ fontSize: 11, letterSpacing: "0.35em", color: "rgba(0,245,255,0.5)", marginBottom: 8, fontWeight: 600 }}>
+              ◼ PAUSED
+            </p>
+            <h2 style={{
+              fontSize: 42,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              color: "#fff",
+              textShadow: "0 0 30px rgba(0,245,255,0.4)",
+              marginBottom: 28,
+            }}>
+              Game Paused
+            </h2>
+            <button
+              onClick={() => { gsRef.current = "playing"; setUiState(u => ({ ...u, gs: "playing" })); }}
+              style={{
+                display: "block", width: "100%",
+                padding: "13px 0", borderRadius: 10,
+                fontSize: 14, fontWeight: 800, letterSpacing: "0.15em",
+                color: "#000",
+                background: "linear-gradient(135deg,#00f5ff,#0066ff)",
+                boxShadow: "0 0 24px rgba(0,200,255,0.35)",
+                border: "none", cursor: "pointer", marginBottom: 10,
+              }}
+            >
+              RESUME
+            </button>
+            <button
+              onClick={startGame}
+              style={{
+                display: "block", width: "100%",
+                padding: "12px 0", borderRadius: 10,
+                fontSize: 13, fontWeight: 600, letterSpacing: "0.12em",
+                color: "rgba(255,255,255,0.55)",
+                background: "transparent",
+                border: "1px solid rgba(255,255,255,0.12)",
+                cursor: "pointer",
+              }}
+            >
+              RESTART
+            </button>
+          </div>
         </div>
       );
     }
@@ -1060,12 +1196,27 @@ export function BlockBreaker() {
     if (gs === "levelComplete") {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-none"
-          style={{ background: "rgba(0,0,20,0.6)" }}>
-          <h2 className="text-5xl font-black tracking-widest mb-2" style={{ background: "linear-gradient(90deg,#00f5ff,#00ff88)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent", textShadow: "none" }}>
-            LEVEL {level} CLEAR!
+          style={{ background: "rgba(0,4,20,0.7)", backdropFilter: "blur(3px)" }}>
+          <p style={{ fontSize: 11, letterSpacing: "0.35em", color: "rgba(0,255,136,0.6)", fontWeight: 600, marginBottom: 8 }}>
+            ✦ STAGE COMPLETE
+          </p>
+          <h2 style={{
+            fontSize: 48,
+            fontWeight: 900,
+            letterSpacing: "-0.02em",
+            background: "linear-gradient(135deg,#00f5ff,#00ff88)",
+            WebkitBackgroundClip: "text",
+            WebkitTextFillColor: "transparent",
+            marginBottom: 12,
+          }}>
+            Level {level}
           </h2>
-          <p className="text-yellow-300 font-mono text-xl">Score: {score.toLocaleString()}</p>
-          <p className="text-slate-400 font-mono text-sm mt-4 animate-pulse">Next level loading...</p>
+          <p style={{ fontSize: 22, fontWeight: 700, color: "#ffd700", marginBottom: 4 }}>
+            {score.toLocaleString()} <span style={{ fontSize: 13, fontWeight: 500, color: "rgba(255,215,0,0.5)" }}>pts</span>
+          </p>
+          <p style={{ fontSize: 12, color: "rgba(255,255,255,0.3)", letterSpacing: "0.1em", marginTop: 16 }} className="animate-pulse">
+            NEXT LEVEL INCOMING…
+          </p>
         </div>
       );
     }
@@ -1073,17 +1224,56 @@ export function BlockBreaker() {
     if (gs === "gameOver") {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-auto"
-          style={{ background: "rgba(20,0,0,0.85)", backdropFilter: "blur(6px)" }}>
-          <h2 className="text-6xl font-black tracking-widest mb-2" style={{ color: "#ff2244", textShadow: "0 0 40px #ff2244" }}>
-            GAME OVER
-          </h2>
-          <p className="text-slate-300 font-mono text-lg mb-1">SCORE: <span className="text-yellow-300 font-bold">{score.toLocaleString()}</span></p>
-          <p className="text-slate-400 font-mono text-sm mb-8">BEST: <span className="text-cyan-300">{hiScore.toLocaleString()}</span></p>
-          <button onClick={startGame}
-            className="px-10 py-4 rounded-lg font-black text-xl tracking-widest text-black transition-all hover:scale-105 active:scale-95"
-            style={{ background: "linear-gradient(90deg,#ff2244,#ff6600)", boxShadow: "0 0 30px #ff224488" }}>
-            TRY AGAIN
-          </button>
+          style={{ background: "rgba(18,0,0,0.88)", backdropFilter: "blur(8px)" }}>
+          <div style={{
+            padding: "40px 52px",
+            borderRadius: 20,
+            background: "rgba(25,0,4,0.96)",
+            border: "1px solid rgba(255,34,68,0.22)",
+            boxShadow: "0 0 60px rgba(0,0,0,0.7)",
+            textAlign: "center",
+          }}>
+            <p style={{ fontSize: 11, letterSpacing: "0.35em", color: "rgba(255,60,80,0.6)", marginBottom: 8, fontWeight: 600 }}>
+              ✕ GAME OVER
+            </p>
+            <h2 style={{
+              fontSize: 46,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              color: "#ff2244",
+              textShadow: "0 0 40px rgba(255,34,68,0.5)",
+              marginBottom: 24,
+            }}>
+              You Died
+            </h2>
+            <div style={{
+              padding: "14px 24px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              marginBottom: 24,
+            }}>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 4 }}>FINAL SCORE</p>
+              <p style={{ fontSize: 30, fontWeight: 800, color: "#ffd700" }}>{score.toLocaleString()}</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>
+                Best: <span style={{ color: "rgba(0,245,255,0.7)", fontWeight: 600 }}>{hiScore.toLocaleString()}</span>
+              </p>
+            </div>
+            <button
+              onClick={startGame}
+              style={{
+                display: "block", width: "100%",
+                padding: "13px 0", borderRadius: 10,
+                fontSize: 14, fontWeight: 800, letterSpacing: "0.15em",
+                color: "#fff",
+                background: "linear-gradient(135deg,#ff2244,#cc0022)",
+                boxShadow: "0 0 28px rgba(255,34,68,0.35)",
+                border: "none", cursor: "pointer",
+              }}
+            >
+              TRY AGAIN
+            </button>
+          </div>
         </div>
       );
     }
@@ -1091,26 +1281,64 @@ export function BlockBreaker() {
     if (gs === "victory") {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-auto"
-          style={{ background: "rgba(0,10,0,0.85)", backdropFilter: "blur(6px)" }}>
-          <h2 className="text-6xl font-black tracking-widest mb-2 text-center"
-            style={{ background: "linear-gradient(90deg,#ffff00,#00ff88,#00f5ff)", WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent" }}>
-            VICTORY!
-          </h2>
-          <p className="text-slate-300 font-mono mb-1">All {LEVELS.length} levels conquered!</p>
-          <p className="text-yellow-300 font-mono text-2xl font-bold mb-1">{score.toLocaleString()} pts</p>
-          <p className="text-slate-400 font-mono text-sm mb-8">HIGH SCORE: {hiScore.toLocaleString()}</p>
-          <button onClick={startGame}
-            className="px-10 py-4 rounded-lg font-black text-xl tracking-widest text-black transition-all hover:scale-105 active:scale-95"
-            style={{ background: "linear-gradient(90deg,#ffff00,#00ff88)", boxShadow: "0 0 30px #ffff0055" }}>
-            PLAY AGAIN
-          </button>
+          style={{ background: "rgba(0,10,0,0.88)", backdropFilter: "blur(8px)" }}>
+          <div style={{
+            padding: "40px 52px",
+            borderRadius: 20,
+            background: "rgba(0,14,6,0.96)",
+            border: "1px solid rgba(0,255,136,0.2)",
+            boxShadow: "0 0 80px rgba(0,0,0,0.7)",
+            textAlign: "center",
+          }}>
+            <p style={{ fontSize: 11, letterSpacing: "0.35em", color: "rgba(0,255,136,0.55)", marginBottom: 8, fontWeight: 600 }}>
+              ✦ ALL LEVELS COMPLETE
+            </p>
+            <h2 style={{
+              fontSize: 52,
+              fontWeight: 900,
+              letterSpacing: "-0.02em",
+              background: "linear-gradient(135deg,#ffff00,#00ff88)",
+              WebkitBackgroundClip: "text",
+              WebkitTextFillColor: "transparent",
+              marginBottom: 24,
+            }}>
+              Victory!
+            </h2>
+            <div style={{
+              padding: "14px 24px",
+              borderRadius: 10,
+              background: "rgba(255,255,255,0.04)",
+              border: "1px solid rgba(255,255,255,0.07)",
+              marginBottom: 24,
+            }}>
+              <p style={{ fontSize: 12, color: "rgba(255,255,255,0.35)", letterSpacing: "0.1em", marginBottom: 4 }}>FINAL SCORE</p>
+              <p style={{ fontSize: 32, fontWeight: 800, color: "#ffd700" }}>{score.toLocaleString()}</p>
+              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>
+                High Score: <span style={{ color: "rgba(0,245,255,0.7)", fontWeight: 600 }}>{hiScore.toLocaleString()}</span>
+              </p>
+            </div>
+            <button
+              onClick={startGame}
+              style={{
+                display: "block", width: "100%",
+                padding: "13px 0", borderRadius: 10,
+                fontSize: 14, fontWeight: 800, letterSpacing: "0.15em",
+                color: "#000",
+                background: "linear-gradient(135deg,#ffff00,#00ff88)",
+                boxShadow: "0 0 28px rgba(100,255,100,0.3)",
+                border: "none", cursor: "pointer",
+              }}
+            >
+              PLAY AGAIN
+            </button>
+          </div>
         </div>
       );
     }
     return null;
   };
 
-  const { gs, score, lives, hiScore, level, combo } = uiState;
+  const { gs, score, lives, hiScore, level } = uiState;
   const pu = activePURef.current;
   const showHUD = gs === "playing" || gs === "paused";
 
@@ -1125,46 +1353,82 @@ export function BlockBreaker() {
           style={{ display: "block", width: "100%", height: "100%", imageRendering: "pixelated" }}
         />
 
-        {/* HUD */}
+        {/* ── HUD bar ── */}
         {showHUD && (
-          <div className="absolute top-0 left-0 right-0 flex items-center justify-between px-3 pt-2 pointer-events-none z-20 select-none">
-            <div className="flex flex-col">
-              <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">Score</span>
-              <span className="text-lg font-black text-cyan-300 leading-none" style={{ textShadow: "0 0 10px #00f5ff" }}>
+          <div style={{
+            position: "absolute", top: 0, left: 0, right: 0,
+            display: "flex", alignItems: "center", justifyContent: "space-between",
+            padding: "8px 12px 6px",
+            background: "linear-gradient(180deg,rgba(0,4,20,0.92) 0%,rgba(0,4,20,0) 100%)",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}>
+            {/* Score */}
+            <div style={{ display: "flex", flexDirection: "column", minWidth: 80 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "rgba(0,245,255,0.4)", textTransform: "uppercase" }}>Score</span>
+              <span style={{ fontSize: 20, fontWeight: 900, color: "#00f5ff", lineHeight: 1, textShadow: "0 0 14px rgba(0,245,255,0.6)", letterSpacing: "-0.01em" }}>
                 {score.toLocaleString()}
               </span>
             </div>
-            <div className="flex flex-col items-center">
-              <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">
+
+            {/* Level name (center) */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+              <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
                 {LEVELS[Math.min(level - 1, LEVELS.length - 1)]?.name}
               </span>
-              <span className="text-xs font-mono text-purple-300">LVL {level} / {LEVELS.length}</span>
+              <div style={{
+                marginTop: 3,
+                display: "flex", gap: 3, alignItems: "center",
+              }}>
+                {Array.from({ length: LEVELS.length }).map((_, i) => (
+                  <div key={i} style={{
+                    width: i === level - 1 ? 14 : 5,
+                    height: 3,
+                    borderRadius: 2,
+                    background: i < level ? "#00f5ff" : "rgba(255,255,255,0.12)",
+                    transition: "width 0.3s",
+                    boxShadow: i === level - 1 ? "0 0 6px #00f5ff" : "none",
+                  }} />
+                ))}
+              </div>
             </div>
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-mono text-slate-500 uppercase tracking-widest">Lives</span>
-              <span className="text-lg font-black leading-none" style={{ color: "#ff2244", textShadow: "0 0 10px #ff2244" }}>
-                {"♥".repeat(lives)}
-              </span>
+
+            {/* Lives */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 80 }}>
+              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "rgba(255,60,80,0.5)", textTransform: "uppercase" }}>Lives</span>
+              <div style={{ display: "flex", gap: 4, marginTop: 1 }}>
+                {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
+                  <span key={i} style={{ fontSize: 16, lineHeight: 1, filter: "drop-shadow(0 0 4px #ff2244)", color: "#ff2244" }}>♥</span>
+                ))}
+              </div>
             </div>
           </div>
         )}
 
-        {/* Active power-up indicators */}
+        {/* ── Active power-ups ── */}
         {showHUD && (
-          <div className="absolute bottom-2 left-2 flex gap-1.5 pointer-events-none z-20">
+          <div style={{
+            position: "absolute", bottom: 8, left: 8,
+            display: "flex", gap: 5,
+            pointerEvents: "none",
+          }}>
             {pu.widePaddle > 0 && <PUPill label="WIDE" color="#00ff88" />}
             {pu.fireball > 0 && <PUPill label="FIRE" color="#ff6600" />}
             {pu.slowMo > 0 && <PUPill label="SLOW" color="#00ccff" />}
             {pu.laser > 0 && <PUPill label="LASER" color="#ffff00" />}
-            {pu.magnetPaddle > 0 && <PUPill label="MAG" color="#00f5ff" />}
+            {pu.magnetPaddle > 0 && <PUPill label="MAGNET" color="#00f5ff" />}
           </div>
         )}
 
-        {/* Hi-score */}
+        {/* ── Hi-score corner ── */}
         {showHUD && (
-          <div className="absolute bottom-2 right-2 text-right pointer-events-none z-20">
-            <span className="text-xs font-mono text-slate-600">BEST </span>
-            <span className="text-xs font-mono text-yellow-400">{hiScore.toLocaleString()}</span>
+          <div style={{
+            position: "absolute", bottom: 10, right: 10,
+            textAlign: "right", pointerEvents: "none",
+          }}>
+            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "rgba(255,215,0,0.35)", textTransform: "uppercase" }}>Best</span>
+            <br />
+            <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,215,0,0.6)" }}>{hiScore.toLocaleString()}</span>
           </div>
         )}
 
@@ -1176,9 +1440,22 @@ export function BlockBreaker() {
 }
 
 function PUPill({ label, color }: { label: string; color: string }) {
+  const r = parseInt(color.slice(1, 3), 16);
+  const g = parseInt(color.slice(3, 5), 16);
+  const b = parseInt(color.slice(5, 7), 16);
   return (
-    <div className="px-2 py-0.5 rounded text-xs font-black font-mono"
-      style={{ background: hexWithAlpha(color, 0.2), border: `1px solid ${hexWithAlpha(color, 0.6)}`, color }}>
+    <div style={{
+      padding: "3px 9px",
+      borderRadius: 6,
+      fontSize: 10,
+      fontWeight: 800,
+      letterSpacing: "0.12em",
+      textTransform: "uppercase",
+      color,
+      background: `rgba(${r},${g},${b},0.14)`,
+      border: `1px solid rgba(${r},${g},${b},0.45)`,
+      boxShadow: `0 0 10px rgba(${r},${g},${b},0.2)`,
+    }}>
       {label}
     </div>
   );
