@@ -1304,88 +1304,97 @@ export function BlockBreaker() {
             {uiState.sound ? "🔊" : "🔇"}
           </button>
           {/* header */}
-          <div style={{ marginBottom: 20, textAlign: "center" }}>
-            <p style={{ fontSize: 9, letterSpacing: "0.35em", color: "rgba(0,245,255,0.5)", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
+          <div style={{ marginBottom: 12, textAlign: "center", flexShrink: 0 }}>
+            <p style={{ fontSize: 9, letterSpacing: "0.35em", color: "rgba(0,245,255,0.5)", fontWeight: 700, textTransform: "uppercase", marginBottom: 3 }}>
               BLOCK BREAKER · NEON EDITION
             </p>
-            <h2 style={{ fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>
+            <h2 style={{ fontSize: 22, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em", marginBottom: 2 }}>
               Choose Level
             </h2>
-            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>
-              {unlocked + 1} / {LEVELS.length} unlocked
+            <p style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>
+              {completedRef.current.size} / {LEVELS.length} completed
             </p>
           </div>
 
-          {/* level grid */}
+          {/* level grid — scrollable */}
           <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(5, 60px)",
-            gap: 10,
-            marginBottom: 20,
+            overflowY: "auto",
+            maxHeight: "calc(100% - 140px)",
+            width: "100%",
+            padding: "4px 16px 8px",
+            scrollbarWidth: "thin",
+            scrollbarColor: "rgba(0,245,255,0.2) transparent",
           }}>
-            {LEVELS.map((lvl, i) => {
-              const isUnlocked = i <= unlocked;
-              const isCompleted = completedRef.current.has(i);
-              const isCurrent = i === unlocked && !isCompleted;
-              return (
-                <button
-                  key={i}
-                  disabled={!isUnlocked}
-                  onClick={() => isUnlocked && startGame(i)}
-                  style={{
-                    width: 60, height: 60,
-                    borderRadius: 12,
-                    border: isCompleted
-                      ? "1.5px solid rgba(0,255,136,0.5)"
-                      : isCurrent
-                      ? "1.5px solid rgba(0,245,255,0.6)"
-                      : isUnlocked
-                      ? "1.5px solid rgba(255,255,255,0.15)"
-                      : "1.5px solid rgba(255,255,255,0.06)",
-                    background: isCompleted
-                      ? "rgba(0,255,136,0.08)"
-                      : isCurrent
-                      ? "rgba(0,200,255,0.1)"
-                      : isUnlocked
-                      ? "rgba(255,255,255,0.04)"
-                      : "rgba(255,255,255,0.02)",
-                    boxShadow: isCompleted
-                      ? "0 0 14px rgba(0,255,136,0.2)"
-                      : isCurrent
-                      ? "0 0 16px rgba(0,200,255,0.25)"
-                      : "none",
-                    cursor: isUnlocked ? "pointer" : "default",
-                    display: "flex", flexDirection: "column",
-                    alignItems: "center", justifyContent: "center",
-                    gap: 2, position: "relative",
-                    transition: "transform 0.12s",
-                  }}
-                  onMouseEnter={e => { if (isUnlocked) (e.currentTarget as HTMLElement).style.transform = "scale(1.08)"; }}
-                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
-                >
-                  {isUnlocked ? (
-                    <>
-                      <span style={{ fontSize: 16, fontWeight: 900, color: isCompleted ? "#00ff88" : isCurrent ? "#00f5ff" : "rgba(255,255,255,0.7)", lineHeight: 1 }}>
-                        {i + 1}
-                      </span>
-                      {isCompleted && (
-                        <span style={{ fontSize: 10, color: "#00ff88" }}>★</span>
-                      )}
-                      {!isCompleted && (
-                        <span style={{ fontSize: 7.5, color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em", textTransform: "uppercase", lineHeight: 1 }}>
-                          {lvl.name.split(" ")[0]}
+            <div style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(10, 1fr)",
+              gap: 7,
+              width: "100%",
+              maxWidth: 560,
+              margin: "0 auto",
+            }}>
+              {LEVELS.map((lvl, i) => {
+                const isUnlocked = i <= unlocked;
+                const isCompleted = completedRef.current.has(i);
+                const isCurrent = i === unlocked && !isCompleted;
+                return (
+                  <button
+                    key={i}
+                    disabled={!isUnlocked}
+                    onClick={() => isUnlocked && startGame(i)}
+                    style={{
+                      aspectRatio: "1",
+                      borderRadius: 8,
+                      border: isCompleted
+                        ? "1.5px solid rgba(0,255,136,0.55)"
+                        : isCurrent
+                        ? "1.5px solid rgba(0,245,255,0.7)"
+                        : isUnlocked
+                        ? "1.5px solid rgba(255,255,255,0.14)"
+                        : "1.5px solid rgba(255,255,255,0.05)",
+                      background: isCompleted
+                        ? "rgba(0,255,136,0.09)"
+                        : isCurrent
+                        ? "rgba(0,200,255,0.12)"
+                        : isUnlocked
+                        ? "rgba(255,255,255,0.04)"
+                        : "rgba(0,0,0,0.3)",
+                      boxShadow: isCompleted
+                        ? "0 0 10px rgba(0,255,136,0.25)"
+                        : isCurrent
+                        ? "0 0 12px rgba(0,200,255,0.3)"
+                        : "none",
+                      cursor: isUnlocked ? "pointer" : "default",
+                      display: "flex", flexDirection: "column",
+                      alignItems: "center", justifyContent: "center",
+                      gap: 1, transition: "transform 0.1s",
+                      padding: 0,
+                    }}
+                    onMouseEnter={e => { if (isUnlocked) (e.currentTarget as HTMLElement).style.transform = "scale(1.12)"; }}
+                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+                    title={isUnlocked ? lvl.name : "Locked"}
+                  >
+                    {isUnlocked ? (
+                      <>
+                        <span style={{ fontSize: 12, fontWeight: 900, color: isCompleted ? "#00ff88" : isCurrent ? "#00f5ff" : "rgba(255,255,255,0.75)", lineHeight: 1 }}>
+                          {isCompleted ? "★" : i + 1}
                         </span>
-                      )}
-                    </>
-                  ) : (
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="2">
-                      <rect x="3" y="11" width="18" height="11" rx="2"/>
-                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-                    </svg>
-                  )}
-                </button>
-              );
-            })}
+                        {!isCompleted && (
+                          <span style={{ fontSize: 6, color: isCurrent ? "rgba(0,245,255,0.6)" : "rgba(255,255,255,0.25)", letterSpacing: "0.03em", textTransform: "uppercase", lineHeight: 1 }}>
+                            {i + 1}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.15)" strokeWidth="2.5">
+                        <rect x="3" y="11" width="18" height="11" rx="2"/>
+                        <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                      </svg>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* back to menu */}
