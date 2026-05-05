@@ -733,59 +733,100 @@ export function BlockBreaker() {
       const ox = so > 0 ? (Math.random() - 0.5) * so : 0;
       const oy = so > 0 ? (Math.random() - 0.5) * so : 0;
       const x = blk.x + ox, y = blk.y + oy;
+      const bw = blk.w, bh = blk.h;
+      const radius = 6;
+      const isIndestr = blk.type === "indestructible";
 
       ctx.save();
 
-      // fill
+      // outer glow — layered for more punch
+      const glowStrength = isIndestr ? 6 : (blk.sparkle > 0 ? 28 : 18);
       ctx.shadowColor = blk.glow;
-      ctx.shadowBlur = blk.type === "indestructible" ? 6 : 16;
-      const grad = ctx.createLinearGradient(x, y, x, y + blk.h);
-      grad.addColorStop(0, hexWithAlpha(blk.glow, 0.18));
-      grad.addColorStop(1, blk.color);
+      ctx.shadowBlur = glowStrength;
+
+      // body fill — rich 3-stop gradient: vivid edge → dark center → black base
+      const grad = ctx.createLinearGradient(x, y, x, y + bh);
+      grad.addColorStop(0,   hexWithAlpha(blk.glow, 0.55));   // bright top
+      grad.addColorStop(0.35, blk.color);                       // saturated mid
+      grad.addColorStop(1,   "rgba(0,0,0,0.85)");              // deep base
       ctx.fillStyle = grad;
-      drawRoundRect(ctx, x, y, blk.w, blk.h, 5);
+      drawRoundRect(ctx, x, y, bw, bh, radius);
       ctx.fill();
 
-      // border glow
-      ctx.strokeStyle = hexWithAlpha(blk.glow, blk.sparkle > 0 ? 1 : 0.6);
-      ctx.lineWidth = blk.sparkle > 0 ? 2 : 1.2;
+      // reset shadow before layering details
+      ctx.shadowBlur = 0;
+
+      // top-edge highlight bevel — glass shine
+      ctx.save();
+      ctx.clip();  // clip to block shape
+      const shine = ctx.createLinearGradient(x, y, x, y + bh * 0.45);
+      shine.addColorStop(0,   "rgba(255,255,255,0.22)");
+      shine.addColorStop(0.5, "rgba(255,255,255,0.06)");
+      shine.addColorStop(1,   "rgba(255,255,255,0)");
+      ctx.fillStyle = shine;
+      drawRoundRect(ctx, x, y, bw, bh, radius);
+      ctx.fill();
+      ctx.restore();
+
+      // border — crisp neon outline
+      ctx.shadowColor = blk.glow;
+      ctx.shadowBlur = blk.sparkle > 0 ? 14 : 7;
+      ctx.strokeStyle = hexWithAlpha(blk.glow, blk.sparkle > 0 ? 1.0 : 0.75);
+      ctx.lineWidth = blk.sparkle > 0 ? 1.8 : 1.1;
+      drawRoundRect(ctx, x, y, bw, bh, radius);
       ctx.stroke();
+      ctx.shadowBlur = 0;
 
-      // HP bar for tough blocks
-      if (blk.maxHp > 1 && blk.type !== "indestructible") {
+      // HP pip bar for multi-hit blocks
+      if (blk.maxHp > 1 && !isIndestr) {
         const pct = blk.hp / blk.maxHp;
-        ctx.fillStyle = "rgba(0,0,0,0.6)";
-        ctx.fillRect(x + 4, y + blk.h - 6, blk.w - 8, 4);
+        const barX = x + 5, barY = y + bh - 5, barW = bw - 10, barH = 3;
+        ctx.fillStyle = "rgba(0,0,0,0.55)";
+        ctx.beginPath(); ctx.roundRect(barX, barY, barW, barH, 2); ctx.fill();
         ctx.fillStyle = blk.glow;
-        ctx.fillRect(x + 4, y + blk.h - 6, (blk.w - 8) * pct, 4);
+        ctx.shadowColor = blk.glow; ctx.shadowBlur = 6;
+        ctx.beginPath(); ctx.roundRect(barX, barY, barW * pct, barH, 2); ctx.fill();
+        ctx.shadowBlur = 0;
       }
 
-      // indestructible pattern
-      if (blk.type === "indestructible") {
-        ctx.strokeStyle = "rgba(100,120,160,0.3)";
+      // indestructible cross-hatch
+      if (isIndestr) {
+        ctx.save();
+        drawRoundRect(ctx, x, y, bw, bh, radius);
+        ctx.clip();
+        ctx.strokeStyle = "rgba(80,110,160,0.18)";
         ctx.lineWidth = 1;
-        for (let i = 0; i < blk.w; i += 10) {
-          ctx.beginPath(); ctx.moveTo(x + i, y); ctx.lineTo(x + i - blk.h, y + blk.h); ctx.stroke();
+        for (let i = -bh; i < bw + bh; i += 10) {
+          ctx.beginPath(); ctx.moveTo(x + i, y); ctx.lineTo(x + i + bh, y + bh); ctx.stroke();
         }
+        ctx.restore();
       }
 
-      // power-up icon
+      // power-up star burst bg + icon
       if (blk.type === "powerup" && blk.powerUp) {
         const info = POWERUP_COLORS[blk.powerUp];
-        ctx.font = "bold 11px monospace";
-        ctx.fillStyle = blk.glow;
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText(info.icon, x + blk.w / 2, y + blk.h / 2);
+        ctx.save();
+        drawRoundRect(ctx, x + 2, y + 2, bw - 4, bh - 4, 4);
+        ctx.clip();
+        ctx.fillStyle = hexWithAlpha(blk.glow, 0.1);
+        ctx.fill();
+        ctx.restore();
+        ctx.font = "bold 12px system-ui, sans-serif";
+        ctx.fillStyle = "#fff";
+        ctx.shadowColor = blk.glow; ctx.shadowBlur = 10;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText(info.icon, x + bw / 2, y + bh / 2);
+        ctx.shadowBlur = 0;
       }
 
-      // explosive symbol
+      // explosive warning mark
       if (blk.type === "explosive") {
-        ctx.font = "bold 14px monospace";
-        ctx.fillStyle = "#ff6600";
-        ctx.textAlign = "center";
-        ctx.textBaseline = "middle";
-        ctx.fillText("✕", x + blk.w / 2, y + blk.h / 2);
+        ctx.font = "bold 13px system-ui, sans-serif";
+        ctx.fillStyle = "#ff8800";
+        ctx.shadowColor = "#ff4400"; ctx.shadowBlur = 12;
+        ctx.textAlign = "center"; ctx.textBaseline = "middle";
+        ctx.fillText("✦", x + bw / 2, y + bh / 2);
+        ctx.shadowBlur = 0;
       }
 
       ctx.restore();
@@ -1357,49 +1398,86 @@ export function BlockBreaker() {
         {showHUD && (
           <div style={{
             position: "absolute", top: 0, left: 0, right: 0,
-            display: "flex", alignItems: "center", justifyContent: "space-between",
-            padding: "8px 12px 6px",
-            background: "linear-gradient(180deg,rgba(0,4,20,0.92) 0%,rgba(0,4,20,0) 100%)",
+            display: "flex", alignItems: "stretch", justifyContent: "space-between",
+            gap: 8,
+            padding: "7px 10px",
+            background: "linear-gradient(180deg,rgba(0,3,18,0.97) 60%,rgba(0,3,18,0) 100%)",
+            borderBottom: "1px solid rgba(0,245,255,0.07)",
             pointerEvents: "none",
             userSelect: "none",
           }}>
-            {/* Score */}
-            <div style={{ display: "flex", flexDirection: "column", minWidth: 80 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "rgba(0,245,255,0.4)", textTransform: "uppercase" }}>Score</span>
-              <span style={{ fontSize: 20, fontWeight: 900, color: "#00f5ff", lineHeight: 1, textShadow: "0 0 14px rgba(0,245,255,0.6)", letterSpacing: "-0.01em" }}>
-                {score.toLocaleString()}
-              </span>
-            </div>
 
-            {/* Level name (center) */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-              <span style={{ fontSize: 11, fontWeight: 700, color: "rgba(255,255,255,0.7)", letterSpacing: "0.12em", textTransform: "uppercase" }}>
-                {LEVELS[Math.min(level - 1, LEVELS.length - 1)]?.name}
-              </span>
-              <div style={{
-                marginTop: 3,
-                display: "flex", gap: 3, alignItems: "center",
-              }}>
-                {Array.from({ length: LEVELS.length }).map((_, i) => (
-                  <div key={i} style={{
-                    width: i === level - 1 ? 14 : 5,
-                    height: 3,
-                    borderRadius: 2,
-                    background: i < level ? "#00f5ff" : "rgba(255,255,255,0.12)",
-                    transition: "width 0.3s",
-                    boxShadow: i === level - 1 ? "0 0 6px #00f5ff" : "none",
-                  }} />
-                ))}
+            {/* ── Score chip ── */}
+            <div style={{
+              display: "flex", alignItems: "center", gap: 10,
+              padding: "4px 14px 4px 10px",
+              borderRadius: 10,
+              background: "rgba(0,245,255,0.06)",
+              border: "1px solid rgba(0,245,255,0.14)",
+            }}>
+              {/* cyan accent bar */}
+              <div style={{ width: 3, height: 28, borderRadius: 2, background: "linear-gradient(180deg,#00f5ff,#0055ff)", boxShadow: "0 0 8px #00f5ff" }} />
+              <div>
+                <div style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: "0.22em", color: "rgba(0,245,255,0.45)", textTransform: "uppercase", lineHeight: 1, marginBottom: 2 }}>Score</div>
+                <div style={{ fontSize: 22, fontWeight: 900, color: "#fff", lineHeight: 1, letterSpacing: "-0.02em", textShadow: "0 0 20px rgba(0,245,255,0.7)" }}>
+                  {score.toLocaleString()}
+                </div>
               </div>
             </div>
 
-            {/* Lives */}
-            <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", minWidth: 80 }}>
-              <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.2em", color: "rgba(255,60,80,0.5)", textTransform: "uppercase" }}>Lives</span>
-              <div style={{ display: "flex", gap: 4, marginTop: 1 }}>
-                {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
-                  <span key={i} style={{ fontSize: 16, lineHeight: 1, filter: "drop-shadow(0 0 4px #ff2244)", color: "#ff2244" }}>♥</span>
+            {/* ── Center: level name + progress ── */}
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1 }}>
+              <div style={{
+                fontSize: 10, fontWeight: 800, letterSpacing: "0.2em",
+                textTransform: "uppercase",
+                color: "rgba(255,255,255,0.85)",
+                textShadow: "0 0 12px rgba(180,120,255,0.5)",
+                marginBottom: 5,
+              }}>
+                {LEVELS[Math.min(level - 1, LEVELS.length - 1)]?.name}
+              </div>
+              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
+                {Array.from({ length: LEVELS.length }).map((_, i) => (
+                  <div key={i} style={{
+                    width: i === level - 1 ? 16 : 4,
+                    height: 4,
+                    borderRadius: 3,
+                    background: i < level
+                      ? (i === level - 1 ? "#00f5ff" : "rgba(0,245,255,0.45)")
+                      : "rgba(255,255,255,0.1)",
+                    boxShadow: i === level - 1 ? "0 0 8px #00f5ff" : "none",
+                    transition: "width 0.35s ease",
+                  }} />
                 ))}
+              </div>
+              <div style={{ fontSize: 8, color: "rgba(255,255,255,0.22)", letterSpacing: "0.15em", marginTop: 4 }}>
+                LEVEL {level} / {LEVELS.length}
+              </div>
+            </div>
+
+            {/* ── Lives + best chip ── */}
+            <div style={{
+              display: "flex", flexDirection: "column", alignItems: "flex-end", justifyContent: "center",
+              padding: "4px 10px 4px 14px",
+              borderRadius: 10,
+              background: "rgba(255,34,68,0.06)",
+              border: "1px solid rgba(255,34,68,0.14)",
+              gap: 4,
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <div style={{ display: "flex", gap: 3 }}>
+                  {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
+                    <svg key={i} width="14" height="14" viewBox="0 0 24 24" fill="#ff2244"
+                      style={{ filter: "drop-shadow(0 0 5px #ff2244)" }}>
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                  ))}
+                </div>
+                <div style={{ width: 3, height: 28, borderRadius: 2, background: "linear-gradient(180deg,#ff2244,#990022)", boxShadow: "0 0 8px #ff2244" }} />
+              </div>
+              {/* best score inline */}
+              <div style={{ fontSize: 9, color: "rgba(255,215,0,0.5)", letterSpacing: "0.1em", fontWeight: 600, textAlign: "right" }}>
+                BEST <span style={{ color: "#ffd700", fontWeight: 800 }}>{hiScore.toLocaleString()}</span>
               </div>
             </div>
           </div>
@@ -1417,18 +1495,6 @@ export function BlockBreaker() {
             {pu.slowMo > 0 && <PUPill label="SLOW" color="#00ccff" />}
             {pu.laser > 0 && <PUPill label="LASER" color="#ffff00" />}
             {pu.magnetPaddle > 0 && <PUPill label="MAGNET" color="#00f5ff" />}
-          </div>
-        )}
-
-        {/* ── Hi-score corner ── */}
-        {showHUD && (
-          <div style={{
-            position: "absolute", bottom: 10, right: 10,
-            textAlign: "right", pointerEvents: "none",
-          }}>
-            <span style={{ fontSize: 9, fontWeight: 700, letterSpacing: "0.18em", color: "rgba(255,215,0,0.35)", textTransform: "uppercase" }}>Best</span>
-            <br />
-            <span style={{ fontSize: 12, fontWeight: 700, color: "rgba(255,215,0,0.6)" }}>{hiScore.toLocaleString()}</span>
           </div>
         )}
 
