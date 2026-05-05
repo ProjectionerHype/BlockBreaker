@@ -781,16 +781,37 @@ export function BlockBreaker() {
     const lvl = LEVELS[Math.min(levelRef.current, LEVELS.length - 1)];
     ctx.clearRect(0, 0, GAME_W, GAME_H);
 
-    // background gradient
-    const bg = ctx.createLinearGradient(0, 0, 0, GAME_H);
-    bg.addColorStop(0, "#000510");
-    bg.addColorStop(1, "#020020");
+    // background gradient — deep nebula
+    const bg = ctx.createLinearGradient(0, 0, GAME_W, GAME_H);
+    bg.addColorStop(0, "#0a0030");
+    bg.addColorStop(0.35, "#130045");
+    bg.addColorStop(0.65, "#0d0835");
+    bg.addColorStop(1, "#060020");
     ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+    // nebula glow blobs
+    const neb1 = ctx.createRadialGradient(GAME_W * 0.2, GAME_H * 0.3, 0, GAME_W * 0.2, GAME_H * 0.3, GAME_W * 0.45);
+    neb1.addColorStop(0, "rgba(120,0,255,0.10)");
+    neb1.addColorStop(1, "rgba(120,0,255,0)");
+    ctx.fillStyle = neb1;
+    ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+    const neb2 = ctx.createRadialGradient(GAME_W * 0.8, GAME_H * 0.6, 0, GAME_W * 0.8, GAME_H * 0.6, GAME_W * 0.4);
+    neb2.addColorStop(0, "rgba(0,120,255,0.08)");
+    neb2.addColorStop(1, "rgba(0,120,255,0)");
+    ctx.fillStyle = neb2;
+    ctx.fillRect(0, 0, GAME_W, GAME_H);
+
+    const neb3 = ctx.createRadialGradient(GAME_W * 0.5, GAME_H * 0.15, 0, GAME_W * 0.5, GAME_H * 0.15, GAME_W * 0.3);
+    neb3.addColorStop(0, "rgba(200,0,180,0.07)");
+    neb3.addColorStop(1, "rgba(200,0,180,0)");
+    ctx.fillStyle = neb3;
     ctx.fillRect(0, 0, GAME_W, GAME_H);
 
     // grid lines
     ctx.save();
-    ctx.strokeStyle = "rgba(0,180,255,0.04)";
+    ctx.strokeStyle = "rgba(140,80,255,0.05)";
     ctx.lineWidth = 1;
     for (let x = 0; x < GAME_W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GAME_H); ctx.stroke(); }
     for (let y = 0; y < GAME_H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GAME_W, y); ctx.stroke(); }
