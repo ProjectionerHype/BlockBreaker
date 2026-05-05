@@ -9,7 +9,7 @@ import {
   LASER_SPEED, LASER_COOLDOWN, POWERUP_COLORS,
 } from "./constants";
 import { LEVELS, BLOCK_COLOR_MAP, BLOCK_HP } from "./levels";
-import { Audio } from "./audio";
+import { Audio, setAudioMuted, isAudioMuted } from "./audio";
 
 const POWERUP_TYPES: PowerUpType[] = [
   "widePaddle", "multiBall", "fireball", "slowMo", "extraLife", "laser", "magnetPaddle"
@@ -190,11 +190,24 @@ export function BlockBreaker() {
   const diedOnLevelRef = useRef(0);
   const achievedRef = useRef<Set<string>>(new Set());
 
+  // level progression
+  const unlockedRef = useRef<number>(parseInt(localStorage.getItem("bb-unlocked") || "0", 10));
+  const completedRef = useRef<Set<number>>(new Set(
+    JSON.parse(localStorage.getItem("bb-completed") || "[]") as number[]
+  ));
+
+  // sound toggle
+  const soundRef = useRef<boolean>(!isAudioMuted());
+
   // React state (for UI overlays only)
   const [uiState, setUiState] = useState<{
     gs: GameState; level: number; score: number; lives: number; hiScore: number; combo: number;
-    toast: string; streak: number;
-  }>({ gs: "menu", level: 1, score: 0, lives: 3, hiScore: 0, combo: 0, toast: "", streak: streakRef.current });
+    toast: string; streak: number; unlocked: number; sound: boolean;
+  }>({
+    gs: "menu", level: 1, score: 0, lives: 3, hiScore: 0, combo: 0,
+    toast: "", streak: streakRef.current,
+    unlocked: unlockedRef.current, sound: soundRef.current,
+  });
 
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -347,8 +360,20 @@ export function BlockBreaker() {
     toastTimerRef.current = setTimeout(() => setUiState(u => ({ ...u, toast: "" })), 2000);
   }, []);
 
-  const startGame = useCallback((fromLevel?: number) => {
-    const startLvl = fromLevel ?? Math.floor(Math.random() * LEVELS.length);
+  const goToLevelSelect = useCallback(() => {
+    gsRef.current = "levelSelect";
+    setUiState(u => ({ ...u, gs: "levelSelect", unlocked: unlockedRef.current }));
+  }, []);
+
+  const toggleSound = useCallback(() => {
+    const next = !soundRef.current;
+    soundRef.current = next;
+    setAudioMuted(!next);
+    setUiState(u => ({ ...u, sound: next }));
+    if (next) Audio.menuClick();
+  }, []);
+
+  const startGame = useCallback((lvlIdx: number) => {
     // update streak
     const today = new Date().toDateString();
     const lastDate = localStorage.getItem("bb-streak-date");
@@ -361,10 +386,10 @@ export function BlockBreaker() {
       localStorage.setItem("bb-streak-date", today);
     }
     achievedRef.current = new Set();
-    levelRef.current = startLvl;
+    levelRef.current = lvlIdx;
     livesRef.current = 3;
     scoreRef.current = 0;
-    startLevel(startLvl);
+    startLevel(lvlIdx);
     setUiState(u => ({ ...u, score: 0, lives: 3, hiScore: hiScoreRef.current, streak: newStreak }));
   }, [startLevel, showToast]);
 
@@ -631,7 +656,17 @@ export function BlockBreaker() {
     // check level complete
     const hasBreakable = blocks.some(b => b.alive && b.type !== "indestructible");
     if (!hasBreakable) {
-      const nextLvl = levelRef.current + 1;
+      const clearedLvl = levelRef.current;
+      const nextLvl = clearedLvl + 1;
+
+      // unlock next level + mark this as completed
+      completedRef.current.add(clearedLvl);
+      localStorage.setItem("bb-completed", JSON.stringify([...completedRef.current]));
+      if (nextLvl > unlockedRef.current && nextLvl < LEVELS.length) {
+        unlockedRef.current = nextLvl;
+        localStorage.setItem("bb-unlocked", String(nextLvl));
+      }
+
       if (nextLvl >= LEVELS.length) {
         gsRef.current = "victory";
         if (scoreRef.current > hiScoreRef.current) {
@@ -639,15 +674,16 @@ export function BlockBreaker() {
           localStorage.setItem("bb-hi", String(hiScoreRef.current));
         }
         Audio.victory();
-        setUiState(u => ({ ...u, gs: "victory", score: scoreRef.current, hiScore: hiScoreRef.current }));
+        setUiState(u => ({ ...u, gs: "victory", score: scoreRef.current, hiScore: hiScoreRef.current, unlocked: unlockedRef.current }));
       } else {
         gsRef.current = "levelComplete";
         Audio.levelComplete();
-        setUiState(u => ({ ...u, gs: "levelComplete", score: scoreRef.current }));
+        setUiState(u => ({ ...u, gs: "levelComplete", score: scoreRef.current, unlocked: unlockedRef.current }));
+        // after brief celebration, go back to level select
         setTimeout(() => {
-          levelRef.current = nextLvl;
-          startLevel(nextLvl);
-        }, 2200);
+          gsRef.current = "levelSelect";
+          setUiState(u => ({ ...u, gs: "levelSelect", unlocked: unlockedRef.current }));
+        }, 2400);
       }
       return;
     }
@@ -1152,6 +1188,16 @@ export function BlockBreaker() {
     if (gs === "menu") {
       return (
         <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-auto select-none">
+          {/* Sound toggle — top right */}
+          <button onClick={toggleSound} style={{
+            position: "absolute", top: 12, right: 14,
+            background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8, cursor: "pointer", padding: "6px 8px",
+            fontSize: 16, lineHeight: 1,
+            color: uiState.sound ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.22)",
+          }}>
+            {uiState.sound ? "🔊" : "🔇"}
+          </button>
           {/* title */}
           <div className="mb-1 text-center">
             <h1
@@ -1192,9 +1238,9 @@ export function BlockBreaker() {
             )}
           </div>
 
-          {/* play button */}
+          {/* play button → goes to level select */}
           <button
-            onClick={() => startGame()}
+            onClick={goToLevelSelect}
             style={{
               padding: "14px 52px",
               borderRadius: 12,
@@ -1212,7 +1258,7 @@ export function BlockBreaker() {
             onMouseEnter={e => { (e.target as HTMLElement).style.transform = "scale(1.06)"; }}
             onMouseLeave={e => { (e.target as HTMLElement).style.transform = "scale(1)"; }}
           >
-            PLAY NOW
+            SELECT LEVEL
           </button>
 
           {/* controls legend */}
@@ -1238,6 +1284,122 @@ export function BlockBreaker() {
               </span>
             ))}
           </div>
+        </div>
+      );
+    }
+
+    if (gs === "levelSelect") {
+      const unlocked = uiState.unlocked ?? 0;
+      return (
+        <div className="absolute inset-0 flex flex-col items-center justify-center z-10 pointer-events-auto select-none"
+          style={{ background: "rgba(0,2,16,0.96)", backdropFilter: "blur(4px)" }}>
+          {/* Sound toggle — top right */}
+          <button onClick={toggleSound} style={{
+            position: "absolute", top: 12, right: 14,
+            background: "transparent", border: "1px solid rgba(255,255,255,0.1)",
+            borderRadius: 8, cursor: "pointer", padding: "6px 8px",
+            fontSize: 16, lineHeight: 1,
+            color: uiState.sound ? "rgba(255,255,255,0.65)" : "rgba(255,255,255,0.22)",
+          }}>
+            {uiState.sound ? "🔊" : "🔇"}
+          </button>
+          {/* header */}
+          <div style={{ marginBottom: 20, textAlign: "center" }}>
+            <p style={{ fontSize: 9, letterSpacing: "0.35em", color: "rgba(0,245,255,0.5)", fontWeight: 700, textTransform: "uppercase", marginBottom: 4 }}>
+              BLOCK BREAKER · NEON EDITION
+            </p>
+            <h2 style={{ fontSize: 26, fontWeight: 900, color: "#fff", letterSpacing: "-0.01em" }}>
+              Choose Level
+            </h2>
+            <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginTop: 4 }}>
+              {unlocked + 1} / {LEVELS.length} unlocked
+            </p>
+          </div>
+
+          {/* level grid */}
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(5, 60px)",
+            gap: 10,
+            marginBottom: 20,
+          }}>
+            {LEVELS.map((lvl, i) => {
+              const isUnlocked = i <= unlocked;
+              const isCompleted = completedRef.current.has(i);
+              const isCurrent = i === unlocked && !isCompleted;
+              return (
+                <button
+                  key={i}
+                  disabled={!isUnlocked}
+                  onClick={() => isUnlocked && startGame(i)}
+                  style={{
+                    width: 60, height: 60,
+                    borderRadius: 12,
+                    border: isCompleted
+                      ? "1.5px solid rgba(0,255,136,0.5)"
+                      : isCurrent
+                      ? "1.5px solid rgba(0,245,255,0.6)"
+                      : isUnlocked
+                      ? "1.5px solid rgba(255,255,255,0.15)"
+                      : "1.5px solid rgba(255,255,255,0.06)",
+                    background: isCompleted
+                      ? "rgba(0,255,136,0.08)"
+                      : isCurrent
+                      ? "rgba(0,200,255,0.1)"
+                      : isUnlocked
+                      ? "rgba(255,255,255,0.04)"
+                      : "rgba(255,255,255,0.02)",
+                    boxShadow: isCompleted
+                      ? "0 0 14px rgba(0,255,136,0.2)"
+                      : isCurrent
+                      ? "0 0 16px rgba(0,200,255,0.25)"
+                      : "none",
+                    cursor: isUnlocked ? "pointer" : "default",
+                    display: "flex", flexDirection: "column",
+                    alignItems: "center", justifyContent: "center",
+                    gap: 2, position: "relative",
+                    transition: "transform 0.12s",
+                  }}
+                  onMouseEnter={e => { if (isUnlocked) (e.currentTarget as HTMLElement).style.transform = "scale(1.08)"; }}
+                  onMouseLeave={e => { (e.currentTarget as HTMLElement).style.transform = "scale(1)"; }}
+                >
+                  {isUnlocked ? (
+                    <>
+                      <span style={{ fontSize: 16, fontWeight: 900, color: isCompleted ? "#00ff88" : isCurrent ? "#00f5ff" : "rgba(255,255,255,0.7)", lineHeight: 1 }}>
+                        {i + 1}
+                      </span>
+                      {isCompleted && (
+                        <span style={{ fontSize: 10, color: "#00ff88" }}>★</span>
+                      )}
+                      {!isCompleted && (
+                        <span style={{ fontSize: 7.5, color: "rgba(255,255,255,0.3)", letterSpacing: "0.05em", textTransform: "uppercase", lineHeight: 1 }}>
+                          {lvl.name.split(" ")[0]}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="rgba(255,255,255,0.18)" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2"/>
+                      <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                    </svg>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* back to menu */}
+          <button
+            onClick={() => { gsRef.current = "menu"; setUiState(u => ({ ...u, gs: "menu" })); }}
+            style={{
+              padding: "8px 24px", borderRadius: 8,
+              fontSize: 11, fontWeight: 600, letterSpacing: "0.12em", textTransform: "uppercase",
+              color: "rgba(255,255,255,0.35)", background: "transparent",
+              border: "1px solid rgba(255,255,255,0.1)", cursor: "pointer",
+            }}
+          >
+            ← Back
+          </button>
         </div>
       );
     }
@@ -1392,7 +1554,7 @@ export function BlockBreaker() {
               ⚡ REVENGE — LEVEL {diedOnLevelRef.current + 1}
             </button>
             <button
-              onClick={() => startGame()}
+              onClick={goToLevelSelect}
               style={{
                 display: "block", width: "100%",
                 padding: "12px 0", borderRadius: 10,
@@ -1403,7 +1565,7 @@ export function BlockBreaker() {
                 cursor: "pointer",
               }}
             >
-              RANDOM LEVEL
+              ← LEVEL SELECT
             </button>
           </div>
         </div>
@@ -1450,7 +1612,7 @@ export function BlockBreaker() {
               </p>
             </div>
             <button
-              onClick={startGame}
+              onClick={goToLevelSelect}
               style={{
                 display: "block", width: "100%",
                 padding: "13px 0", borderRadius: 10,
@@ -1461,7 +1623,7 @@ export function BlockBreaker() {
                 border: "none", cursor: "pointer",
               }}
             >
-              PLAY AGAIN
+              ← LEVEL SELECT
             </button>
           </div>
         </div>
@@ -1524,15 +1686,30 @@ export function BlockBreaker() {
               <div style={{ fontSize: 8, color: "rgba(255,255,255,0.2)", letterSpacing: "0.12em", marginTop: 4 }}>LVL {level} / {LEVELS.length}</div>
             </div>
 
-            {/* Lives — right */}
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", marginBottom: 3 }}>Lives</div>
-              <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
-                {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
-                  <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill="#fff" opacity={0.9}>
-                    <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
-                  </svg>
-                ))}
+            {/* Lives + sound — right */}
+            <div style={{ textAlign: "right", display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+              <button
+                onClick={toggleSound}
+                style={{
+                  pointerEvents: "auto",
+                  background: "transparent", border: "none", cursor: "pointer",
+                  padding: "2px 4px", borderRadius: 6,
+                  color: uiState.sound ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.2)",
+                  fontSize: 14, lineHeight: 1,
+                }}
+                title={uiState.sound ? "Mute sound" : "Enable sound"}
+              >
+                {uiState.sound ? "🔊" : "🔇"}
+              </button>
+              <div>
+                <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: "0.18em", color: "rgba(255,255,255,0.3)", textTransform: "uppercase", marginBottom: 3 }}>Lives</div>
+                <div style={{ display: "flex", gap: 4, justifyContent: "flex-end" }}>
+                  {Array.from({ length: Math.max(lives, 0) }).map((_, i) => (
+                    <svg key={i} width="13" height="13" viewBox="0 0 24 24" fill="#fff" opacity={0.9}>
+                      <path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/>
+                    </svg>
+                  ))}
+                </div>
               </div>
             </div>
           </div>

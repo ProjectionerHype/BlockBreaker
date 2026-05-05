@@ -1,4 +1,11 @@
 let ctx: AudioContext | null = null;
+let _muted = localStorage.getItem("bb-sound") === "off";
+
+export function setAudioMuted(m: boolean) {
+  _muted = m;
+  localStorage.setItem("bb-sound", m ? "off" : "on");
+}
+export function isAudioMuted() { return _muted; }
 
 function getCtx(): AudioContext {
   if (!ctx) ctx = new AudioContext();
@@ -7,6 +14,7 @@ function getCtx(): AudioContext {
 }
 
 function note(freq: number, type: OscillatorType, dur: number, vol = 0.15, detune = 0) {
+  if (_muted) return;
   try {
     const c = getCtx();
     const osc = c.createOscillator();
@@ -24,6 +32,7 @@ function note(freq: number, type: OscillatorType, dur: number, vol = 0.15, detun
 }
 
 function noise(dur: number, vol = 0.08, hiFreq = 2000) {
+  if (_muted) return;
   try {
     const c = getCtx();
     const bufLen = c.sampleRate * dur;
@@ -103,5 +112,8 @@ export const Audio = {
   },
   ballLaunch() {
     note(660, "sine", 0.1, 0.09);
+  },
+  menuClick() {
+    note(440, "sine", 0.06, 0.08);
   },
 };

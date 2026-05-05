@@ -1,4 +1,4 @@
-export type GameState = "menu" | "playing" | "paused" | "levelComplete" | "gameOver" | "victory";
+export type GameState = "menu" | "levelSelect" | "playing" | "paused" | "levelComplete" | "gameOver" | "victory";
 
 export interface Vec2 {
   x: number;
