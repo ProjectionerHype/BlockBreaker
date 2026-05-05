@@ -1695,11 +1695,8 @@ export function BlockBreaker() {
               </span>
             </div>
 
-            {/* Center — level name + progress dots inline */}
+            {/* Center — progress dots inline */}
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.18em", color: "rgba(255,255,255,0.8)", textTransform: "uppercase", textShadow: "0 0 10px rgba(180,120,255,0.4)" }}>
-                {LEVELS[Math.min(level - 1, LEVELS.length - 1)]?.name}
-              </span>
               <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
                 {Array.from({ length: LEVELS.length }).map((_, i) => (
                   <div key={i} style={{
