@@ -209,16 +209,8 @@ export function BlockBreaker() {
   // background stars
   const starsRef = useRef<{ x: number; y: number; r: number; brightness: number; speed: number }[]>([]);
 
-  // streak tracking
-  const streakRef = useRef<number>((() => {
-    const saved = localStorage.getItem("bb-streak");
-    const lastDate = localStorage.getItem("bb-streak-date");
-    if (!saved || !lastDate) return 0;
-    const today = new Date().toDateString();
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    if (lastDate === today || lastDate === yesterday) return parseInt(saved, 10);
-    return 0;
-  })());
+  // streak tracking (in-memory only, resets each session)
+  const streakRef = useRef<number>(0);
   const diedOnLevelRef = useRef(0);
   const achievedRef = useRef<Set<string>>(new Set());
 
@@ -441,17 +433,7 @@ export function BlockBreaker() {
   }, []);
 
   const startGame = useCallback((lvlIdx: number) => {
-    // update streak
-    const today = new Date().toDateString();
-    const lastDate = localStorage.getItem("bb-streak-date");
-    const yesterday = new Date(Date.now() - 86400000).toDateString();
-    let newStreak = streakRef.current;
-    if (lastDate !== today) {
-      newStreak = lastDate === yesterday ? newStreak + 1 : 1;
-      streakRef.current = newStreak;
-      localStorage.setItem("bb-streak", String(newStreak));
-      localStorage.setItem("bb-streak-date", today);
-    }
+    const newStreak = streakRef.current;
     achievedRef.current = new Set();
     levelRef.current = lvlIdx;
     livesRef.current = 3;
