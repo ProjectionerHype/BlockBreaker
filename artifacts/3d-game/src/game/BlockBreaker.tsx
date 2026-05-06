@@ -1695,19 +1695,6 @@ export function BlockBreaker() {
               </span>
             </div>
 
-            {/* Center — progress dots inline */}
-            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-              <div style={{ display: "flex", gap: 3, alignItems: "center" }}>
-                {Array.from({ length: LEVELS.length }).map((_, i) => (
-                  <div key={i} style={{
-                    width: i === level - 1 ? 14 : 3, height: 3, borderRadius: 3,
-                    background: i < level ? (i === level - 1 ? "#00f5ff" : "rgba(0,245,255,0.4)") : "rgba(255,255,255,0.12)",
-                    boxShadow: i === level - 1 ? "0 0 6px #00f5ff" : "none",
-                    transition: "width 0.3s ease",
-                  }} />
-                ))}
-              </div>
-            </div>
 
             {/* Lives + sound — right */}
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
