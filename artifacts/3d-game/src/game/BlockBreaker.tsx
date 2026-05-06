@@ -21,10 +21,11 @@ const uid = () => ++_pid;
 function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 function clamp(v: number, lo: number, hi: number) { return Math.max(lo, Math.min(hi, v)); }
 
-function buildLevel(levelIdx: number): Block[] {
+function buildLevel(levelIdx: number, dims: GameDims): Block[] {
   const lvl = LEVELS[levelIdx];
   const blocks: Block[] = [];
   const rows = lvl.rows;
+  const { blockW, blockH, blockPad, blockOffsetX, blockOffsetY } = dims;
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < lvl.cols; c++) {
       const val = lvl.grid[r * lvl.cols + c];
@@ -45,9 +46,9 @@ function buildLevel(levelIdx: number): Block[] {
         : undefined;
 
       blocks.push({
-        x: BLOCK_OFFSET_X + c * (BLOCK_W + BLOCK_PAD),
-        y: BLOCK_OFFSET_Y + r * (BLOCK_H + BLOCK_PAD),
-        w: BLOCK_W, h: BLOCK_H,
+        x: blockOffsetX + c * (blockW + blockPad),
+        y: blockOffsetY + r * (blockH + blockPad),
+        w: blockW, h: blockH,
         hp: BLOCK_HP[val], maxHp: BLOCK_HP[val],
         type, color: ci.color, glow: ci.glow,
         powerUp,
@@ -132,14 +133,42 @@ function drawStar(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: numb
   ctx.closePath();
 }
 
+// ── portrait game dimensions ────────────────────────────────────────────────
+const PORT_W = 400;
+const PORT_H = 720;
+const PORT_PADDLE_Y = PORT_H - 50;
+const PORT_PADDLE_W = 80;
+const PORT_BLOCK_W = 33;
+const PORT_BLOCK_H = 20;
+const PORT_BLOCK_PAD = 4;
+const PORT_BLOCK_OFFSET_X = Math.round((PORT_W - (BLOCK_COLS * (PORT_BLOCK_W + PORT_BLOCK_PAD) - PORT_BLOCK_PAD)) / 2);
+
+type GameDims = {
+  W: number; H: number;
+  paddleY: number; paddleW: number;
+  blockW: number; blockH: number; blockPad: number;
+  blockOffsetX: number; blockOffsetY: number;
+};
+const LANDSCAPE_DIMS: GameDims = {
+  W: GAME_W, H: GAME_H, paddleY: PADDLE_Y, paddleW: PADDLE_W,
+  blockW: BLOCK_W, blockH: BLOCK_H, blockPad: BLOCK_PAD,
+  blockOffsetX: BLOCK_OFFSET_X, blockOffsetY: BLOCK_OFFSET_Y,
+};
+const PORTRAIT_DIMS: GameDims = {
+  W: PORT_W, H: PORT_H, paddleY: PORT_PADDLE_Y, paddleW: PORT_PADDLE_W,
+  blockW: PORT_BLOCK_W, blockH: PORT_BLOCK_H, blockPad: PORT_BLOCK_PAD,
+  blockOffsetX: PORT_BLOCK_OFFSET_X, blockOffsetY: BLOCK_OFFSET_Y,
+};
+
 // ── main component ─────────────────────────────────────────────────────────
 
 export function BlockBreaker() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(1);
-  const portraitRef = useRef(false);
-  const [portraitMode, setPortraitMode] = useState(false);
+  const _initPortrait = typeof window !== "undefined" && window.innerHeight > window.innerWidth * 1.1;
+  const portraitRef = useRef(_initPortrait);
+  const [portraitMode, setPortraitMode] = useState(_initPortrait);
 
   // game state refs (mutated in game loop)
   const gsRef = useRef<GameState>("menu");
@@ -163,6 +192,7 @@ export function BlockBreaker() {
   // active power-up durations (ms)
   const activePURef = useRef({
     widePaddle: 0,
+    shrinkPaddle: 0,
     fireball: 0,
     slowMo: 0,
     laser: 0,
@@ -200,6 +230,11 @@ export function BlockBreaker() {
 
   // sound toggle
   const soundRef = useRef<boolean>(!isAudioMuted());
+  const gdRef = useRef<GameDims>(_initPortrait ? PORTRAIT_DIMS : LANDSCAPE_DIMS);
+  const [canvasDims, setCanvasDims] = useState(() => ({
+    w: _initPortrait ? PORT_W : GAME_W,
+    h: _initPortrait ? PORT_H : GAME_H,
+  }));
 
   // React state (for UI overlays only)
   const [uiState, setUiState] = useState<{
@@ -241,17 +276,33 @@ export function BlockBreaker() {
       const w = el.clientWidth;
       const h = el.clientHeight;
       const isPortrait = h > w * 1.1;
+      const wasPortrait = portraitRef.current;
       portraitRef.current = isPortrait;
       setPortraitMode(isPortrait);
       if (isPortrait) {
-        // Rotate game -90°: screen height becomes game width, screen width becomes game height
-        const sw = h / GAME_W;
-        const sh = w / GAME_H;
-        scaleRef.current = Math.min(sw, sh);
+        gdRef.current = PORTRAIT_DIMS;
+        scaleRef.current = Math.min(w / PORT_W, h / PORT_H);
+        if (!wasPortrait) {
+          setCanvasDims({ w: PORT_W, h: PORT_H });
+          if (gsRef.current === "playing") {
+            blocksRef.current = buildLevel(levelRef.current, PORTRAIT_DIMS);
+            paddleRef.current = { x: PORT_W / 2, w: PORT_PADDLE_W };
+            paddleTargetRef.current = PORT_W / 2;
+            ballsRef.current = ballsRef.current.map(b => ({ ...b, x: PORT_W / 2, y: PORT_PADDLE_Y - b.radius - 2 }));
+          }
+        }
       } else {
-        const sw = w / GAME_W;
-        const sh = h / GAME_H;
-        scaleRef.current = Math.min(sw, sh);
+        gdRef.current = LANDSCAPE_DIMS;
+        scaleRef.current = Math.min(w / GAME_W, h / GAME_H);
+        if (wasPortrait) {
+          setCanvasDims({ w: GAME_W, h: GAME_H });
+          if (gsRef.current === "playing") {
+            blocksRef.current = buildLevel(levelRef.current, LANDSCAPE_DIMS);
+            paddleRef.current = { x: GAME_W / 2, w: PADDLE_W };
+            paddleTargetRef.current = GAME_W / 2;
+            ballsRef.current = ballsRef.current.map(b => ({ ...b, x: GAME_W / 2, y: PADDLE_Y - b.radius - 2 }));
+          }
+        }
       }
     };
     resize();
@@ -264,24 +315,14 @@ export function BlockBreaker() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const getX = (clientX: number, clientY: number) => {
+    const getX = (clientX: number, _clientY: number) => {
       const s = scaleRef.current;
-      if (portraitRef.current) {
-        // Game rotated -90°: screen Y maps to game X (inverted)
-        const container = containerRef.current;
-        if (!container) return GAME_W / 2;
-        const cr = container.getBoundingClientRect();
-        const cy = (cr.top + cr.bottom) / 2;
-        const gameVisualHeight = GAME_W * s;
-        const gameTop = cy - gameVisualHeight / 2;
-        return clamp(GAME_W * (1 - (clientY - gameTop) / gameVisualHeight), 0, GAME_W);
-      }
       const rect = canvas.getBoundingClientRect();
       return (clientX - rect.left) / s;
     };
 
     const onMove = (x: number) => {
-      paddleTargetRef.current = clamp(x, paddleRef.current.w / 2, GAME_W - paddleRef.current.w / 2);
+      paddleTargetRef.current = clamp(x, paddleRef.current.w / 2, gdRef.current.W - paddleRef.current.w / 2);
       if (gsRef.current === "playing" && !launchedRef.current) {
         ballsRef.current.forEach(b => {
           b.x = paddleTargetRef.current;
@@ -355,23 +396,25 @@ export function BlockBreaker() {
     if (now - laserLastRef.current < LASER_COOLDOWN) return;
     laserLastRef.current = now;
     const px = paddleRef.current.x;
-    lasersRef.current.push({ id: uid(), x: px - 12, y: PADDLE_Y, vy: -LASER_SPEED, alive: true });
-    lasersRef.current.push({ id: uid(), x: px + 12, y: PADDLE_Y, vy: -LASER_SPEED, alive: true });
+    const laserY = gdRef.current.paddleY;
+    lasersRef.current.push({ id: uid(), x: px - 12, y: laserY, vy: -LASER_SPEED, alive: true });
+    lasersRef.current.push({ id: uid(), x: px + 12, y: laserY, vy: -LASER_SPEED, alive: true });
     Audio.laser();
   }, []);
 
   // ── start level ─────────────────────────────────────────────────────────────
   const startLevel = useCallback((lvlIdx: number) => {
     const safeIdx = Math.max(0, Math.min(lvlIdx, LEVELS.length - 1));
-    blocksRef.current = buildLevel(safeIdx);
-    ballsRef.current = [makeBall(GAME_W / 2, PADDLE_Y - BALL_RADIUS - 2)];
+    const gd = gdRef.current;
+    blocksRef.current = buildLevel(safeIdx, gd);
+    ballsRef.current = [makeBall(gd.W / 2, gd.paddleY - BALL_RADIUS - 2)];
     particlesRef.current = [];
     powerUpsRef.current = [];
     lasersRef.current = [];
     shockwavesRef.current = [];
-    paddleRef.current = { x: GAME_W / 2, w: PADDLE_W };
-    paddleTargetRef.current = GAME_W / 2;
-    activePURef.current = { widePaddle: 0, fireball: 0, slowMo: 0, laser: 0, magnetPaddle: 0 };
+    paddleRef.current = { x: gd.W / 2, w: gd.paddleW };
+    paddleTargetRef.current = gd.W / 2;
+    activePURef.current = { widePaddle: 0, shrinkPaddle: 0, fireball: 0, slowMo: 0, laser: 0, magnetPaddle: 0 };
     comboRef.current = 0;
     launchedRef.current = false;
     gsRef.current = "playing";
@@ -429,6 +472,7 @@ export function BlockBreaker() {
   // ── game logic ─────────────────────────────────────────────────────────────
   const updateGame = useCallback((dt: number) => {
     if (gsRef.current !== "playing") return;
+    const { W: GW, H: GH, paddleY: GPY, paddleW: GPW } = gdRef.current;
 
     const lvl = LEVELS[levelRef.current];
     const speedMult = lvl.ballSpeedMultiplier * (activePURef.current.slowMo > 0 ? 0.5 : 1);
@@ -439,7 +483,7 @@ export function BlockBreaker() {
       if (pu[k] > 0) {
         pu[k] = Math.max(0, pu[k] - dt);
         if (pu[k] === 0) {
-          if (k === "widePaddle" || k === "shrinkPaddle") paddleRef.current.w = PADDLE_W;
+          if (k === "widePaddle" || k === "shrinkPaddle") paddleRef.current.w = GPW;
         }
       }
     }
@@ -452,17 +496,17 @@ export function BlockBreaker() {
     const KSPEED = 7;
     if (keysRef.current.left)  paddleTargetRef.current -= KSPEED;
     if (keysRef.current.right) paddleTargetRef.current += KSPEED;
-    paddleTargetRef.current = clamp(paddleTargetRef.current, paddleRef.current.w / 2, GAME_W - paddleRef.current.w / 2);
+    paddleTargetRef.current = clamp(paddleTargetRef.current, paddleRef.current.w / 2, GW - paddleRef.current.w / 2);
 
     // paddle smooth follow
     const paddle = paddleRef.current;
     paddle.x = lerp(paddle.x, paddleTargetRef.current, 0.22);
-    paddle.x = clamp(paddle.x, paddle.w / 2, GAME_W - paddle.w / 2);
+    paddle.x = clamp(paddle.x, paddle.w / 2, GW - paddle.w / 2);
 
     // magnet - pull balls toward paddle
     if (pu.magnetPaddle > 0 && launchedRef.current) {
       for (const b of ballsRef.current) {
-        if (b.y < PADDLE_Y - 40) continue;
+        if (b.y < GPY - 40) continue;
         const dx = paddle.x - b.x;
         b.vx += dx * 0.004;
       }
@@ -471,7 +515,7 @@ export function BlockBreaker() {
     // stars parallax
     for (const s of starsRef.current) {
       s.y += s.speed;
-      if (s.y > GAME_H) { s.y = 0; s.x = Math.random() * GAME_W; }
+      if (s.y > GH) { s.y = 0; s.x = Math.random() * GW; }
     }
 
     // shake decay
@@ -486,7 +530,7 @@ export function BlockBreaker() {
     for (const ball of ballsRef.current) {
       if (!launchedRef.current) {
         ball.x = paddle.x;
-        ball.y = PADDLE_Y - ball.radius - 2;
+        ball.y = GPY - ball.radius - 2;
         continue;
       }
 
@@ -508,11 +552,11 @@ export function BlockBreaker() {
 
       // wall collisions
       if (ball.x - ball.radius < 0) { ball.x = ball.radius; ball.vx = Math.abs(ball.vx); Audio.paddleHit(); }
-      if (ball.x + ball.radius > GAME_W) { ball.x = GAME_W - ball.radius; ball.vx = -Math.abs(ball.vx); Audio.paddleHit(); }
+      if (ball.x + ball.radius > GW) { ball.x = GW - ball.radius; ball.vx = -Math.abs(ball.vx); Audio.paddleHit(); }
       if (ball.y - ball.radius < 0) { ball.y = ball.radius; ball.vy = Math.abs(ball.vy); Audio.paddleHit(); }
 
       // paddle collision
-      const py = PADDLE_Y - PADDLE_H / 2;
+      const py = GPY - PADDLE_H / 2;
       if (
         ball.vy > 0 &&
         ball.y + ball.radius >= py &&
@@ -662,7 +706,7 @@ export function BlockBreaker() {
 
     // remove balls that fell below screen
     const before = ballsRef.current.length;
-    ballsRef.current = ballsRef.current.filter(b => b.y - b.radius < GAME_H + 20);
+    ballsRef.current = ballsRef.current.filter(b => b.y - b.radius < GH + 20);
     if (ballsRef.current.length === 0) {
       // lost a life
       livesRef.current--;
@@ -750,7 +794,7 @@ export function BlockBreaker() {
         if (msg) showToast(msg);
       }
 
-      if (pu2.y - pu2.radius > GAME_H) pu2.alive = false;
+      if (pu2.y - pu2.radius > GH) pu2.alive = false;
     }
     powerUpsRef.current = powerUpsRef.current.filter(p => p.alive);
 
@@ -812,43 +856,44 @@ export function BlockBreaker() {
 
   // ── renderer ───────────────────────────────────────────────────────────────
   const render = useCallback((ctx: CanvasRenderingContext2D, t: number) => {
+    const { W: GW, H: GH, paddleY: GPY } = gdRef.current;
     const lvl = LEVELS[Math.min(levelRef.current, LEVELS.length - 1)];
-    ctx.clearRect(0, 0, GAME_W, GAME_H);
+    ctx.clearRect(0, 0, GW, GH);
 
     // background gradient — deep nebula
-    const bg = ctx.createLinearGradient(0, 0, GAME_W, GAME_H);
+    const bg = ctx.createLinearGradient(0, 0, GW, GH);
     bg.addColorStop(0, "#0a0030");
     bg.addColorStop(0.35, "#130045");
     bg.addColorStop(0.65, "#0d0835");
     bg.addColorStop(1, "#060020");
     ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, GAME_W, GAME_H);
+    ctx.fillRect(0, 0, GW, GH);
 
     // nebula glow blobs
-    const neb1 = ctx.createRadialGradient(GAME_W * 0.2, GAME_H * 0.3, 0, GAME_W * 0.2, GAME_H * 0.3, GAME_W * 0.45);
+    const neb1 = ctx.createRadialGradient(GW * 0.2, GH * 0.3, 0, GW * 0.2, GH * 0.3, GW * 0.45);
     neb1.addColorStop(0, "rgba(120,0,255,0.10)");
     neb1.addColorStop(1, "rgba(120,0,255,0)");
     ctx.fillStyle = neb1;
-    ctx.fillRect(0, 0, GAME_W, GAME_H);
+    ctx.fillRect(0, 0, GW, GH);
 
-    const neb2 = ctx.createRadialGradient(GAME_W * 0.8, GAME_H * 0.6, 0, GAME_W * 0.8, GAME_H * 0.6, GAME_W * 0.4);
+    const neb2 = ctx.createRadialGradient(GW * 0.8, GH * 0.6, 0, GW * 0.8, GH * 0.6, GW * 0.4);
     neb2.addColorStop(0, "rgba(0,120,255,0.08)");
     neb2.addColorStop(1, "rgba(0,120,255,0)");
     ctx.fillStyle = neb2;
-    ctx.fillRect(0, 0, GAME_W, GAME_H);
+    ctx.fillRect(0, 0, GW, GH);
 
-    const neb3 = ctx.createRadialGradient(GAME_W * 0.5, GAME_H * 0.15, 0, GAME_W * 0.5, GAME_H * 0.15, GAME_W * 0.3);
+    const neb3 = ctx.createRadialGradient(GW * 0.5, GH * 0.15, 0, GW * 0.5, GH * 0.15, GW * 0.3);
     neb3.addColorStop(0, "rgba(200,0,180,0.07)");
     neb3.addColorStop(1, "rgba(200,0,180,0)");
     ctx.fillStyle = neb3;
-    ctx.fillRect(0, 0, GAME_W, GAME_H);
+    ctx.fillRect(0, 0, GW, GH);
 
     // grid lines
     ctx.save();
     ctx.strokeStyle = "rgba(140,80,255,0.05)";
     ctx.lineWidth = 1;
-    for (let x = 0; x < GAME_W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GAME_H); ctx.stroke(); }
-    for (let y = 0; y < GAME_H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GAME_W, y); ctx.stroke(); }
+    for (let x = 0; x < GW; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, GH); ctx.stroke(); }
+    for (let y = 0; y < GH; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(GW, y); ctx.stroke(); }
     ctx.restore();
 
     // stars
@@ -1048,7 +1093,7 @@ export function BlockBreaker() {
     // paddle
     const paddle = paddleRef.current;
     const px = paddle.x - paddle.w / 2;
-    const py2 = PADDLE_Y - PADDLE_H / 2;
+    const py2 = GPY - PADDLE_H / 2;
     const pu2 = activePURef.current;
     const paddleColor = pu2.fireball > 0 ? "#ff4400"
       : pu2.laser > 0 ? "#ffff00"
@@ -1113,7 +1158,7 @@ export function BlockBreaker() {
       const pulse = 0.55 + 0.45 * Math.sin(t * 0.0028);
       ctx.save();
       // pill background
-      const hintW = 280, hintH = 30, hintX = GAME_W / 2 - hintW / 2, hintY = PADDLE_Y + 24;
+      const hintW = Math.min(280, GW - 20), hintH = 30, hintX = GW / 2 - hintW / 2, hintY = GPY + 24;
       ctx.globalAlpha = pulse * 0.85;
       ctx.fillStyle = "rgba(0,20,40,0.9)";
       ctx.strokeStyle = "rgba(0,245,255,0.5)";
@@ -1129,14 +1174,14 @@ export function BlockBreaker() {
       ctx.textBaseline = "middle";
       ctx.shadowColor = "#00f5ff";
       ctx.shadowBlur = 8;
-      ctx.fillText("CLICK · SPACE · ← → to move", GAME_W / 2, hintY + hintH / 2);
+      ctx.fillText(portraitRef.current ? "TAP · SWIPE to play" : "CLICK · SPACE · ← → to move", GW / 2, hintY + hintH / 2);
       ctx.restore();
     }
 
     // combo display
     if (comboRef.current >= 2) {
       const scale2 = 1 + 0.08 * Math.sin(t * 0.012);
-      const comboX = GAME_W - 14, comboY = 36;
+      const comboX = GW - 14, comboY = 36;
       ctx.save();
       ctx.translate(comboX, comboY);
       ctx.scale(scale2, scale2);
@@ -1195,11 +1240,11 @@ export function BlockBreaker() {
     const pu = activePURef.current;
     switch (type) {
       case "widePaddle":
-        paddleRef.current.w = Math.min(PADDLE_W * 1.8, 200);
+        paddleRef.current.w = Math.min(gdRef.current.paddleW * 1.8, 200);
         pu.widePaddle = 15000;
         break;
       case "shrinkPaddle":
-        paddleRef.current.w = PADDLE_W * 0.6;
+        paddleRef.current.w = gdRef.current.paddleW * 0.6;
         break;
       case "multiBall": {
         const existing = ballsRef.current[0];
@@ -1508,7 +1553,7 @@ export function BlockBreaker() {
               RESUME
             </button>
             <button
-              onClick={startGame}
+              onClick={() => startGame(0)}
               style={{
                 display: "block", width: "100%",
                 padding: "12px 0", borderRadius: 10,
@@ -1701,8 +1746,8 @@ export function BlockBreaker() {
   const showHUD = gs === "playing" || gs === "paused";
 
   const scale = scaleRef.current;
-  const gameW = GAME_W * scale;
-  const gameH = GAME_H * scale;
+  const gameW = canvasDims.w * scale;
+  const gameH = canvasDims.h * scale;
 
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden"
@@ -1710,12 +1755,11 @@ export function BlockBreaker() {
       <div className="relative" style={{
         width: gameW,
         height: gameH,
-        transform: portraitMode ? "rotate(-90deg)" : undefined,
       }}>
         <canvas
           ref={canvasRef}
-          width={GAME_W}
-          height={GAME_H}
+          width={canvasDims.w}
+          height={canvasDims.h}
           style={{ display: "block", width: "100%", height: "100%", imageRendering: "pixelated" }}
         />
 
