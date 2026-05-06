@@ -138,6 +138,8 @@ export function BlockBreaker() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const scaleRef = useRef(1);
+  const portraitRef = useRef(false);
+  const [portraitMode, setPortraitMode] = useState(false);
 
   // game state refs (mutated in game loop)
   const gsRef = useRef<GameState>("menu");
@@ -236,9 +238,21 @@ export function BlockBreaker() {
     const resize = () => {
       const el = containerRef.current;
       if (!el) return;
-      const sw = el.clientWidth / GAME_W;
-      const sh = el.clientHeight / GAME_H;
-      scaleRef.current = Math.min(sw, sh);
+      const w = el.clientWidth;
+      const h = el.clientHeight;
+      const isPortrait = h > w * 1.1;
+      portraitRef.current = isPortrait;
+      setPortraitMode(isPortrait);
+      if (isPortrait) {
+        // Rotate game -90°: screen height becomes game width, screen width becomes game height
+        const sw = h / GAME_W;
+        const sh = w / GAME_H;
+        scaleRef.current = Math.min(sw, sh);
+      } else {
+        const sw = w / GAME_W;
+        const sh = h / GAME_H;
+        scaleRef.current = Math.min(sw, sh);
+      }
     };
     resize();
     window.addEventListener("resize", resize);
@@ -250,9 +264,19 @@ export function BlockBreaker() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const getX = (clientX: number) => {
-      const rect = canvas.getBoundingClientRect();
+    const getX = (clientX: number, clientY: number) => {
       const s = scaleRef.current;
+      if (portraitRef.current) {
+        // Game rotated -90°: screen Y maps to game X (inverted)
+        const container = containerRef.current;
+        if (!container) return GAME_W / 2;
+        const cr = container.getBoundingClientRect();
+        const cy = (cr.top + cr.bottom) / 2;
+        const gameVisualHeight = GAME_W * s;
+        const gameTop = cy - gameVisualHeight / 2;
+        return clamp(GAME_W * (1 - (clientY - gameTop) / gameVisualHeight), 0, GAME_W);
+      }
+      const rect = canvas.getBoundingClientRect();
       return (clientX - rect.left) / s;
     };
 
@@ -272,9 +296,9 @@ export function BlockBreaker() {
       }
     };
 
-    const mm = (e: MouseEvent) => onMove(getX(e.clientX));
+    const mm = (e: MouseEvent) => onMove(getX(e.clientX, e.clientY));
     const mc = () => onClick();
-    const tm = (e: TouchEvent) => { e.preventDefault(); onMove(getX(e.touches[0].clientX)); };
+    const tm = (e: TouchEvent) => { e.preventDefault(); onMove(getX(e.touches[0].clientX, e.touches[0].clientY)); };
     const tc = (e: TouchEvent) => { e.preventDefault(); onClick(); };
 
     canvas.addEventListener("mousemove", mm);
@@ -1666,10 +1690,18 @@ export function BlockBreaker() {
   const pu = activePURef.current;
   const showHUD = gs === "playing" || gs === "paused";
 
+  const scale = scaleRef.current;
+  const gameW = GAME_W * scale;
+  const gameH = GAME_H * scale;
+
   return (
     <div ref={containerRef} className="relative w-full h-full flex items-center justify-center overflow-hidden"
-      style={{ background: "#000008" }}>
-      <div className="relative" style={{ width: GAME_W * scaleRef.current, height: GAME_H * scaleRef.current }}>
+      style={{ background: "#0a0020" }}>
+      <div className="relative" style={{
+        width: gameW,
+        height: gameH,
+        transform: portraitMode ? "rotate(-90deg)" : undefined,
+      }}>
         <canvas
           ref={canvasRef}
           width={GAME_W}
