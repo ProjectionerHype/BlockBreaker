@@ -546,15 +546,20 @@ export function BlockBreaker() {
           ball.y - ball.radius < by + bh
         ) {
           if (blk.type === "indestructible") {
-            // just bounce
+            // just bounce with proper position correction
             const overlapL = ball.x + ball.radius - bx;
             const overlapR = bx + bw - (ball.x - ball.radius);
             const overlapT = ball.y + ball.radius - by;
             const overlapB = by + bh - (ball.y - ball.radius);
             const minH = Math.min(overlapL, overlapR);
             const minV = Math.min(overlapT, overlapB);
-            if (minH < minV) ball.vx *= -1;
-            else ball.vy *= -1;
+            if (minH < minV) {
+              ball.vx = overlapL < overlapR ? -Math.abs(ball.vx) : Math.abs(ball.vx);
+              ball.x = overlapL < overlapR ? bx - ball.radius : bx + bw + ball.radius;
+            } else {
+              ball.vy = overlapT < overlapB ? -Math.abs(ball.vy) : Math.abs(ball.vy);
+              ball.y = overlapT < overlapB ? by - ball.radius : by + bh + ball.radius;
+            }
             blk.shakeOffset = 6;
             Audio.blockHit(99);
             continue;
@@ -634,7 +639,7 @@ export function BlockBreaker() {
             Audio.blockHit(blk.hp);
           }
 
-          // bounce (unless fireball)
+          // bounce (unless fireball) with proper position correction
           if (!ball.isFireball) {
             const overlapL = ball.x + ball.radius - bx;
             const overlapR = bx + bw - (ball.x - ball.radius);
@@ -642,8 +647,13 @@ export function BlockBreaker() {
             const overlapB = by + bh - (ball.y - ball.radius);
             const minH = Math.min(overlapL, overlapR);
             const minV = Math.min(overlapT, overlapB);
-            if (minH < minV) { ball.vx *= -1; ball.x += ball.vx * 2; }
-            else { ball.vy *= -1; ball.y += ball.vy * 2; }
+            if (minH < minV) {
+              ball.vx = overlapL < overlapR ? -Math.abs(ball.vx) : Math.abs(ball.vx);
+              ball.x = overlapL < overlapR ? bx - ball.radius : bx + bw + ball.radius;
+            } else {
+              ball.vy = overlapT < overlapB ? -Math.abs(ball.vy) : Math.abs(ball.vy);
+              ball.y = overlapT < overlapB ? by - ball.radius : by + bh + ball.radius;
+            }
           }
           break;
         }
