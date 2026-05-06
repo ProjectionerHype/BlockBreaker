@@ -206,7 +206,7 @@ export function BlockBreaker() {
     gs: GameState; level: number; score: number; lives: number; hiScore: number; combo: number;
     toast: string; streak: number; unlocked: number; sound: boolean;
   }>({
-    gs: "menu", level: 1, score: 0, lives: 3, hiScore: 0, combo: 0,
+    gs: "menu", level: 1, score: 0, lives: 3, hiScore: hiScoreRef.current, combo: 0,
     toast: "", streak: streakRef.current,
     unlocked: unlockedRef.current, sound: soundRef.current,
   });
