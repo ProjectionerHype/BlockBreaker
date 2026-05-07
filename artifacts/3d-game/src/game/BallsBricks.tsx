@@ -49,24 +49,37 @@ function rowPalette(turn: number) {
 function cellX(col: number) { return GRID_LEFT + col * STRIDE; }
 function cellY(row: number) { return GRID_TOP + row * STRIDE; }
 
-function generateRow(turn: number): Cell[] {
+function generateRow(turn: number, ballCount: number): Cell[] {
   const pal = rowPalette(turn);
+
+  // Brick density: starts at 25%, ramps up to ~65% by turn 35
+  const brickChance = Math.min(0.25 + turn * 0.012, 0.65);
+
+  // Ball power-up: generous early (18%) so player can grow, tapers to 8%
+  const ballPUChance = Math.max(0.08, 0.18 - turn * 0.003);
+
+  // HP is always anchored to ball count — never feels "impossible"
+  // Multiplier: 0.5 at turn 1 → ~1.7 at turn 50 (soft cap)
+  const mult = 0.5 + Math.min(turn * 0.024, 1.2);
+  const hpBase = Math.max(1, ballCount * mult);
+  const spread = Math.max(1, hpBase * 0.45);
+
   return Array.from({ length: COLS }, () => {
     const r = Math.random();
-    if (r < 0.62) {
-      const variance = Math.max(1, Math.floor(turn * 0.3));
-      const hp = Math.max(1, turn + Math.floor((Math.random() - 0.3) * variance));
+    if (r < brickChance) {
+      const hp = Math.max(1, Math.round(hpBase + (Math.random() - 0.5) * spread));
       return { kind: "brick", hp, maxHp: hp, color: pal.color, glow: pal.glow, shake: 0 } as Brick;
     }
-    if (r < 0.68) return { kind: "ballpu" } as BallPU;
+    if (r < brickChance + ballPUChance) return { kind: "ballpu" } as BallPU;
     return null;
   });
 }
 
 function makeInitialGrid(): Cell[][] {
   const grid: Cell[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
-  for (let r = 0; r < 4; r++) {
-    grid[r] = generateRow(r + 1);
+  // Start gently: only 3 rows, using ball count = 1
+  for (let r = 0; r < 3; r++) {
+    grid[r] = generateRow(r + 1, 1);
   }
   return grid;
 }
@@ -231,7 +244,7 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
     const newGrid: Cell[][] = Array.from({ length: ROWS }, () => Array(COLS).fill(null));
     for (let r = 1; r < ROWS; r++) newGrid[r] = [...grid[r - 1]];
     turnRef.current++;
-    newGrid[0] = generateRow(turnRef.current);
+    newGrid[0] = generateRow(turnRef.current, ballCountRef.current);
     gridRef.current = newGrid;
 
     // Update launch position
