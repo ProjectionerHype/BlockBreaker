@@ -40,27 +40,27 @@ function BBPreview() {
       // Background
       ctx.fillStyle = "#000810"; ctx.fillRect(0, 0, W, H);
 
-      // Blocks
+      // Blocks — fill crisp (no shadowBlur), glow only on border
       for (const b of blocks) {
         if (!b.alive) continue;
         const pal = bColors[b.ci];
         ctx.save();
-        ctx.shadowColor = pal.glow;
-        ctx.shadowBlur = 14;
-        // Gradient fill
+        // Step 1: crisp fill, no shadow
+        ctx.shadowBlur = 0;
         const gr = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.h);
-        gr.addColorStop(0, pal.glow + "88");
-        gr.addColorStop(0.4, pal.fill);
-        gr.addColorStop(1, pal.fill + "aa");
+        gr.addColorStop(0, pal.glow + "bb");
+        gr.addColorStop(0.35, pal.fill);
+        gr.addColorStop(1, pal.fill + "99");
         ctx.fillStyle = gr;
         ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 3); ctx.fill();
-        // Border
-        ctx.strokeStyle = pal.glow + "cc"; ctx.lineWidth = 1;
-        ctx.shadowBlur = 6; ctx.stroke();
-        // Shine
+        // Step 2: neon border glow
+        ctx.shadowColor = pal.glow; ctx.shadowBlur = 14;
+        ctx.strokeStyle = pal.glow; ctx.lineWidth = 1; ctx.stroke();
+        // Step 3: shine
+        ctx.shadowBlur = 0;
         ctx.save(); ctx.clip();
         const shine = ctx.createLinearGradient(b.x, b.y, b.x, b.y + b.h * 0.5);
-        shine.addColorStop(0, "rgba(255,255,255,0.35)"); shine.addColorStop(1, "rgba(255,255,255,0)");
+        shine.addColorStop(0, "rgba(255,255,255,0.38)"); shine.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = shine; ctx.fillRect(b.x, b.y, b.w, b.h * 0.5);
         ctx.restore(); ctx.restore();
       }
@@ -135,27 +135,30 @@ function BVBPreview() {
       // Background
       ctx.fillStyle = "#04000f"; ctx.fillRect(0, 0, W, H);
 
-      // Bricks
+      // Bricks — fill crisp (no shadowBlur), glow only on border
       for (let r = 0; r < 5; r++) for (let col = 0; col < COLS; col++) {
         if (!alive[r][col]) continue;
         const pal = pals[r % pals.length];
         const bx = 8 + col * (bw + 3), by = 8 + r * (bh + 4);
         ctx.save();
-        ctx.shadowColor = pal.g; ctx.shadowBlur = 16;
+        // Step 1: crisp fill
+        ctx.shadowBlur = 0;
         const gr = ctx.createLinearGradient(bx, by, bx, by + bh);
-        gr.addColorStop(0, pal.g + "88");
+        gr.addColorStop(0, pal.g + "bb");
         gr.addColorStop(0.35, pal.c);
-        gr.addColorStop(1, pal.c + "aa");
+        gr.addColorStop(1, pal.c + "99");
         ctx.fillStyle = gr; ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 3); ctx.fill();
-        // Border
-        ctx.strokeStyle = pal.g; ctx.lineWidth = 1; ctx.shadowBlur = 6; ctx.stroke();
-        // Shine
+        // Step 2: neon border glow
+        ctx.shadowColor = pal.g; ctx.shadowBlur = 14;
+        ctx.strokeStyle = pal.g; ctx.lineWidth = 1; ctx.stroke();
+        // Step 3: shine
+        ctx.shadowBlur = 0;
         ctx.save(); ctx.clip();
         const shine = ctx.createLinearGradient(bx, by, bx, by + bh * 0.5);
         shine.addColorStop(0, "rgba(255,255,255,0.38)"); shine.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = shine; ctx.fillRect(bx, by, bw, bh * 0.5); ctx.restore();
-        // HP label
-        ctx.shadowBlur = 5; ctx.fillStyle = "#fff";
+        // Step 4: HP label — crisp, no blur
+        ctx.shadowBlur = 0; ctx.fillStyle = "#fff";
         ctx.font = "bold 9px sans-serif"; ctx.textAlign = "center"; ctx.textBaseline = "middle";
         ctx.fillText(String(hps[r][col]), bx + bw / 2, by + bh / 2);
         ctx.restore();
