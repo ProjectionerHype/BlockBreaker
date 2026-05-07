@@ -32,13 +32,13 @@ type Phase = "aiming" | "shooting" | "gameOver";
 // ── palettes ──────────────────────────────────────────────────────────────────
 
 const ROW_PALETTES = [
-  { color: "#7b1fa2", glow: "#e040fb" },
-  { color: "#b71c1c", glow: "#ef5350" },
-  { color: "#0d47a1", glow: "#42a5f5" },
-  { color: "#1b5e20", glow: "#66bb6a" },
-  { color: "#e65100", glow: "#ffa726" },
-  { color: "#4a148c", glow: "#ab47bc" },
-  { color: "#006064", glow: "#26c6da" },
+  { color: "#5a0080", glow: "#ee44ff" },   // vivid magenta-purple
+  { color: "#8b0000", glow: "#ff4455" },   // vivid red
+  { color: "#003a8b", glow: "#44aaff" },   // vivid blue
+  { color: "#005c20", glow: "#33ff88" },   // vivid green
+  { color: "#8b3a00", glow: "#ff9922" },   // vivid orange
+  { color: "#380065", glow: "#bb55ff" },   // vivid violet
+  { color: "#005060", glow: "#22e8ff" },   // vivid cyan
 ];
 
 function rowPalette(turn: number) {
@@ -369,28 +369,30 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
   const render = useCallback((ctx: CanvasRenderingContext2D, t: number) => {
     ctx.clearRect(0, 0, GAME_W, GAME_H);
 
-    // Background
+    // Background — slightly richer than before
     const bg = ctx.createLinearGradient(0, 0, 0, GAME_H);
-    bg.addColorStop(0, "#0d0030");
-    bg.addColorStop(1, "#050015");
+    bg.addColorStop(0, "#0a0028");
+    bg.addColorStop(1, "#04000f");
     ctx.fillStyle = bg;
     ctx.fillRect(0, 0, GAME_W, GAME_H);
 
-    // Stars
+    // Stars — brighter
     for (const s of starsRef.current) {
-      const tw = 0.4 + 0.6 * Math.sin(t * 0.0009 + s.b * 9);
+      const tw = 0.5 + 0.5 * Math.sin(t * 0.0009 + s.b * 9);
       ctx.save();
-      ctx.globalAlpha = s.b * tw * 0.75;
+      ctx.globalAlpha = s.b * tw * 0.9;
       ctx.fillStyle = "#fff";
+      ctx.shadowColor = "#aaddff";
+      ctx.shadowBlur = s.r * 3;
       ctx.beginPath();
       ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
       ctx.fill();
       ctx.restore();
     }
 
-    // Subtle grid lines in playfield
+    // Subtle grid lines
     ctx.save();
-    ctx.strokeStyle = "rgba(100,60,200,0.07)";
+    ctx.strokeStyle = "rgba(140,80,255,0.1)";
     ctx.lineWidth = 1;
     for (let c = 0; c <= COLS; c++) {
       const x = GRID_LEFT + c * STRIDE - (c > 0 ? GAP / 2 : 0);
@@ -411,24 +413,28 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
         const bx = cellX(c), by = cellY(r);
 
         if (cell.kind === "ballpu") {
-          // Ball power-up token
+          // Ball power-up token — bright and punchy
           ctx.save();
           const cx2 = bx + CELL / 2, cy2 = by + CELL / 2;
-          const pulse = 0.85 + 0.15 * Math.sin(t * 0.004 + c + r);
-          ctx.shadowColor = "#00ff88";
-          ctx.shadowBlur = 14;
-          ctx.strokeStyle = "#00ff88";
-          ctx.lineWidth = 1.8;
+          const pulse = 0.82 + 0.18 * Math.sin(t * 0.005 + c + r);
           ctx.globalAlpha = pulse;
+          // outer glow fill
+          ctx.shadowColor = "#00ff88";
+          ctx.shadowBlur = 22;
+          ctx.fillStyle = "rgba(0,255,136,0.18)";
+          ctx.beginPath();
+          ctx.arc(cx2, cy2, CELL * 0.42, 0, Math.PI * 2);
+          ctx.fill();
+          // ring
+          ctx.strokeStyle = "#00ff88";
+          ctx.lineWidth = 2;
           ctx.beginPath();
           ctx.arc(cx2, cy2, CELL * 0.38, 0, Math.PI * 2);
           ctx.stroke();
-          ctx.fillStyle = "rgba(0,255,136,0.12)";
-          ctx.fill();
-          ctx.shadowBlur = 0;
+          // label
+          ctx.shadowBlur = 10;
           ctx.fillStyle = "#00ff88";
-          ctx.globalAlpha = pulse;
-          ctx.font = "bold 11px 'Inter', sans-serif";
+          ctx.font = "bold 13px 'Inter', sans-serif";
           ctx.textAlign = "center";
           ctx.textBaseline = "middle";
           ctx.fillText("+1", cx2, cy2);
@@ -442,39 +448,43 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
         const w = CELL - 2, h = CELL - 2;
 
         ctx.save();
-        ctx.shadowColor = brick.glow;
-        ctx.shadowBlur = 12;
 
-        // Body gradient
+        // Outer glow — double-pass for richness
+        ctx.shadowColor = brick.glow;
+        ctx.shadowBlur = 20;
+
+        // Body gradient — bright top, rich middle, not pitch-black at bottom
         const grad = ctx.createLinearGradient(x, y, x, y + h);
-        grad.addColorStop(0, brick.glow + "55");
-        grad.addColorStop(0.35, brick.color);
-        grad.addColorStop(1, "rgba(0,0,0,0.82)");
+        grad.addColorStop(0, brick.glow + "99");      // vivid top highlight
+        grad.addColorStop(0.3, brick.color + "ff");   // full body color
+        grad.addColorStop(1, brick.color + "55");     // dark but not black
         ctx.fillStyle = grad;
         ctx.beginPath();
-        ctx.roundRect(x, y, w, h, 5);
+        ctx.roundRect(x, y, w, h, 6);
         ctx.fill();
 
-        // Border
-        ctx.shadowBlur = 6;
-        ctx.strokeStyle = brick.glow + "bb";
-        ctx.lineWidth = 1.3;
+        // Bright neon border
+        ctx.shadowBlur = 8;
+        ctx.strokeStyle = brick.glow;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Shine
+        // Shine — brighter and taller
         ctx.save();
         ctx.clip();
-        const shine = ctx.createLinearGradient(x, y, x, y + h * 0.4);
-        shine.addColorStop(0, "rgba(255,255,255,0.22)");
+        const shine = ctx.createLinearGradient(x, y, x, y + h * 0.55);
+        shine.addColorStop(0, "rgba(255,255,255,0.42)");
+        shine.addColorStop(0.5, "rgba(255,255,255,0.12)");
         shine.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = shine;
-        ctx.fillRect(x, y, w, h * 0.42);
+        ctx.fillRect(x, y, w, h * 0.55);
         ctx.restore();
 
-        // HP label
-        ctx.shadowBlur = 0;
+        // HP label — bright white with subtle glow
+        ctx.shadowColor = "#fff";
+        ctx.shadowBlur = 6;
         ctx.fillStyle = "#fff";
-        const fontSize = brick.hp >= 100 ? 12 : brick.hp >= 10 ? 15 : 18;
+        const fontSize = brick.hp >= 100 ? 12 : brick.hp >= 10 ? 15 : 19;
         ctx.font = `900 ${fontSize}px 'Inter', sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
@@ -484,10 +494,12 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
       }
     }
 
-    // Game over line
+    // Game over line — brighter warning red
     ctx.save();
-    ctx.strokeStyle = "rgba(255,60,60,0.35)";
+    ctx.strokeStyle = "rgba(255,50,50,0.55)";
     ctx.lineWidth = 2;
+    ctx.shadowColor = "rgba(255,50,50,0.4)";
+    ctx.shadowBlur = 8;
     ctx.setLineDash([8, 5]);
     ctx.beginPath();
     ctx.moveTo(GRID_LEFT, GRID_BOTTOM + 2);
@@ -496,94 +508,99 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
     ctx.setLineDash([]);
     ctx.restore();
 
-    // Aim dots
+    // Aim dots — brighter cyan glow
     const aimDots = aimDotsRef.current;
     if (phaseRef.current === "aiming" && aimDots.length > 0) {
       ctx.save();
       for (let i = 0; i < aimDots.length; i++) {
         const d = aimDots[i];
-        const a = (1 - i / aimDots.length) * 0.75;
+        const a = (1 - i / aimDots.length) * 0.85;
         ctx.globalAlpha = a;
-        ctx.fillStyle = "#ffffff";
-        ctx.shadowColor = "#aaccff";
-        ctx.shadowBlur = 4;
+        ctx.fillStyle = "#00f5ff";
+        ctx.shadowColor = "#00f5ff";
+        ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.arc(d.x, d.y, 2.8 - (i / aimDots.length) * 1.5, 0, Math.PI * 2);
+        ctx.arc(d.x, d.y, 3 - (i / aimDots.length) * 1.6, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.restore();
     }
 
-    // Launch indicator
+    // Launch indicator — bright cyan ball
     const lx = launchXRef.current;
     ctx.save();
     ctx.shadowColor = "#00f5ff";
-    ctx.shadowBlur = 18;
-    ctx.fillStyle = "#00f5ff";
+    ctx.shadowBlur = 28;
+    const launchGrad = ctx.createRadialGradient(lx - 3, LAUNCH_Y - 3, 1, lx, LAUNCH_Y, BALL_R);
+    launchGrad.addColorStop(0, "#ffffff");
+    launchGrad.addColorStop(0.4, "#88eeff");
+    launchGrad.addColorStop(1, "#00ccdd");
+    ctx.fillStyle = launchGrad;
     ctx.beginPath();
     ctx.arc(lx, LAUNCH_Y, BALL_R, 0, Math.PI * 2);
     ctx.fill();
-    // inner white
-    ctx.shadowBlur = 0;
-    ctx.fillStyle = "#fff";
-    ctx.beginPath();
-    ctx.arc(lx, LAUNCH_Y, BALL_R * 0.45, 0, Math.PI * 2);
-    ctx.fill();
     ctx.restore();
 
-    // Ball count dots under launch
+    // Ball count indicator — bright dots or ×N text
     const bc = ballCountRef.current;
     if (bc > 1) {
       const show = Math.min(bc, 9);
-      const spacing = 16;
+      const spacing = 15;
       const startXd = lx - ((show - 1) * spacing) / 2;
       for (let i = 0; i < show; i++) {
         ctx.save();
-        ctx.globalAlpha = 0.45;
-        ctx.fillStyle = "#aaccff";
-        ctx.shadowColor = "#aaccff";
-        ctx.shadowBlur = 6;
+        ctx.globalAlpha = 0.7;
+        ctx.fillStyle = "#00f5ff";
+        ctx.shadowColor = "#00f5ff";
+        ctx.shadowBlur = 8;
         ctx.beginPath();
-        ctx.arc(startXd + i * spacing, LAUNCH_Y + 26, 4, 0, Math.PI * 2);
+        ctx.arc(startXd + i * spacing, LAUNCH_Y + 24, 3.5, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
       if (bc > 9) {
         ctx.save();
-        ctx.globalAlpha = 0.5;
-        ctx.fillStyle = "#aaccff";
-        ctx.font = "bold 10px sans-serif";
+        ctx.globalAlpha = 0.75;
+        ctx.fillStyle = "#00f5ff";
+        ctx.shadowColor = "#00f5ff";
+        ctx.shadowBlur = 6;
+        ctx.font = "bold 11px sans-serif";
         ctx.textAlign = "center";
-        ctx.fillText(`×${bc}`, lx, LAUNCH_Y + 38);
+        ctx.fillText(`×${bc}`, lx, LAUNCH_Y + 36);
         ctx.restore();
       }
     }
 
-    // Balls in flight
+    // Balls in flight — vivid with bright trail
     for (const ball of ballsRef.current) {
       if (ball.done) continue;
 
+      // Trail — cyan-white gradient
       for (let i = 0; i < ball.trail.length; i++) {
         const tp = ball.trail[i];
         if (tp.a <= 0) continue;
-        const tr = BALL_R * (i / ball.trail.length) * 0.6;
+        const frac = i / ball.trail.length;
+        const tr = BALL_R * frac * 0.7;
         ctx.save();
-        ctx.globalAlpha = tp.a * 0.45;
-        ctx.fillStyle = "#ffffff";
+        ctx.globalAlpha = tp.a * 0.6;
+        ctx.fillStyle = frac > 0.6 ? "#00f5ff" : "#ffffff";
+        ctx.shadowColor = "#00f5ff";
+        ctx.shadowBlur = 10;
         ctx.beginPath();
         ctx.arc(tp.x, tp.y, tr, 0, Math.PI * 2);
         ctx.fill();
         ctx.restore();
       }
 
+      // Ball — bright radial gradient
       ctx.save();
-      ctx.shadowColor = "#c8d8ff";
-      ctx.shadowBlur = 22;
-      const bg2 = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 1, ball.x, ball.y, BALL_R);
-      bg2.addColorStop(0, "#ffffff");
-      bg2.addColorStop(0.45, "#cce0ff");
-      bg2.addColorStop(1, "#8899dd");
-      ctx.fillStyle = bg2;
+      ctx.shadowColor = "#00eeff";
+      ctx.shadowBlur = 30;
+      const ballGrad = ctx.createRadialGradient(ball.x - 3, ball.y - 3, 1, ball.x, ball.y, BALL_R);
+      ballGrad.addColorStop(0, "#ffffff");
+      ballGrad.addColorStop(0.35, "#aaeeff");
+      ballGrad.addColorStop(1, "#0088cc");
+      ctx.fillStyle = ballGrad;
       ctx.beginPath();
       ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
       ctx.fill();
