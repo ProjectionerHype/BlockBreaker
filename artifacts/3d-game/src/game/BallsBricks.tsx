@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
+import { setAudioMuted, isAudioMuted } from "./audio";
 
 // ── constants ─────────────────────────────────────────────────────────────────
 
@@ -149,7 +150,15 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
     turn: 1,
     ballCount: 1,
     hiScore: parseInt(localStorage.getItem("bb2-hi") || "0", 10),
+    sound: !isAudioMuted(),
+    isNewBest: false,
   });
+
+  const toggleSound = useCallback(() => {
+    const next = isAudioMuted();
+    setAudioMuted(!next);
+    setUiState(u => ({ ...u, sound: next }));
+  }, []);
 
   // init stars
   useEffect(() => {
@@ -235,8 +244,9 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
       phaseRef.current = "gameOver";
       const hi = parseInt(localStorage.getItem("bb2-hi") || "0", 10);
       const newHi = Math.max(hi, scoreRef.current);
+      const isNewBest = scoreRef.current > hi;
       if (newHi > hi) localStorage.setItem("bb2-hi", String(newHi));
-      setUiState(u => ({ ...u, phase: "gameOver", score: scoreRef.current, turn: turnRef.current, hiScore: newHi }));
+      setUiState(u => ({ ...u, phase: "gameOver", score: scoreRef.current, turn: turnRef.current, hiScore: newHi, isNewBest }));
       return;
     }
 
@@ -627,7 +637,7 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
     setUiState(u => ({ ...u, phase: "aiming", score: 0, turn: 1, ballCount: 1 }));
   }, []);
 
-  const { phase, score, turn, ballCount, hiScore } = uiState;
+  const { phase, score, turn, ballCount, hiScore, sound, isNewBest } = uiState;
 
   return (
     <div
@@ -642,51 +652,158 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
           style={{ display: "block", maxWidth: "100vw", maxHeight: "100vh", cursor: phaseRef.current === "aiming" ? "crosshair" : "default" }}
         />
 
-        {/* ── HUD ── */}
+        {/* ── HUD — single transparent row ── */}
         <div style={{
           position: "absolute", top: 0, left: 0, width: "100%",
           display: "flex", alignItems: "center", justifyContent: "space-between",
-          padding: "8px 10px", background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)",
+          padding: "7px 10px",
           boxSizing: "border-box", pointerEvents: "none",
         }}>
           <button
             onClick={onHome}
-            style={{ pointerEvents: "auto", background: "transparent", border: "1px solid rgba(255,255,255,0.15)", borderRadius: 6, color: "rgba(255,255,255,0.5)", fontSize: 10, padding: "3px 9px", cursor: "pointer", letterSpacing: "0.08em" }}
+            style={{ pointerEvents: "auto", background: "transparent", border: "1px solid rgba(255,255,255,0.12)", borderRadius: 6, color: "rgba(255,255,255,0.4)", fontSize: 9, padding: "3px 8px", cursor: "pointer", letterSpacing: "0.1em" }}
           >
             ← HOME
           </button>
-          <div style={{ display: "flex", gap: 18, fontSize: 11, letterSpacing: "0.1em", color: "rgba(255,255,255,0.55)" }}>
-            <span>TURN <strong style={{ color: "#00f5ff", fontSize: 13 }}>{turn}</strong></span>
-            <span>BALLS <strong style={{ color: "#00ff88", fontSize: 13 }}>{ballCount}</strong></span>
-            <span>SCORE <strong style={{ color: "#ffd700", fontSize: 13 }}>{score.toLocaleString()}</strong></span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14, fontSize: 10, letterSpacing: "0.1em", color: "rgba(255,255,255,0.45)" }}>
+            <span>T<strong style={{ color: "#00f5ff", fontWeight: 800 }}>{turn}</strong></span>
+            <span>🔵<strong style={{ color: "#00ff88", fontWeight: 800 }}>{ballCount}</strong></span>
+            <strong style={{ color: "#ffd700", fontSize: 12, fontWeight: 800 }}>{score.toLocaleString()}</strong>
           </div>
+          <button
+            onClick={toggleSound}
+            style={{ pointerEvents: "auto", background: "transparent", border: "none", cursor: "pointer", fontSize: 14, lineHeight: 1, padding: "2px 4px", color: sound ? "rgba(255,255,255,0.55)" : "rgba(255,255,255,0.2)" }}
+            title={sound ? "Mute" : "Unmute"}
+          >
+            {sound ? "🔊" : "🔇"}
+          </button>
         </div>
 
         {/* ── Game Over overlay ── */}
         {phase === "gameOver" && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,20,0.88)", backdropFilter: "blur(10px)" }}>
-            <div style={{ textAlign: "center", padding: "40px 52px", borderRadius: 20, background: "rgba(0,5,25,0.97)", border: "1px solid rgba(220,60,60,0.3)", boxShadow: "0 0 60px rgba(220,60,60,0.15), 0 0 0 1px rgba(255,255,255,0.04)" }}>
-              <p style={{ fontSize: 10, letterSpacing: "0.4em", color: "rgba(255,80,80,0.6)", marginBottom: 10, fontWeight: 700, textTransform: "uppercase" }}>Game Over</p>
-              <h2 style={{ fontSize: 44, fontWeight: 900, color: "#fff", letterSpacing: "-0.02em", marginBottom: 6 }}>Turn {turn}</h2>
-              <p style={{ fontSize: 24, fontWeight: 800, color: "#ffd700", marginBottom: 4 }}>
-                {score.toLocaleString()}
-                <span style={{ fontSize: 12, fontWeight: 500, color: "rgba(255,215,0,0.5)", marginLeft: 6 }}>pts</span>
-              </p>
-              <p style={{ fontSize: 11, color: "rgba(255,255,255,0.25)", marginBottom: 30, letterSpacing: "0.08em" }}>
-                BEST {hiScore.toLocaleString()}
-              </p>
-              <button
-                onClick={restart}
-                style={{ display: "block", width: "100%", padding: "14px 0", borderRadius: 10, fontSize: 14, fontWeight: 800, letterSpacing: "0.18em", textTransform: "uppercase", color: "#fff", background: "linear-gradient(135deg,#e040fb,#6200ea)", border: "none", cursor: "pointer", marginBottom: 10, boxShadow: "0 0 30px rgba(200,60,255,0.3)" }}
-              >
-                Play Again
-              </button>
-              <button
-                onClick={onHome}
-                style={{ display: "block", width: "100%", padding: "12px 0", borderRadius: 10, fontSize: 12, fontWeight: 600, color: "rgba(255,255,255,0.35)", background: "transparent", border: "1px solid rgba(255,255,255,0.1)", cursor: "pointer" }}
-              >
-                ← Home
-              </button>
+          <div style={{
+            position: "absolute", inset: 0,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            background: "rgba(2,0,20,0.9)", backdropFilter: "blur(12px)",
+          }}>
+            <div style={{
+              width: 300,
+              borderRadius: 24,
+              overflow: "hidden",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.07), 0 30px 80px rgba(0,0,0,0.7), 0 0 60px rgba(150,40,255,0.2)",
+              background: "linear-gradient(160deg, rgba(18,4,40,0.98) 0%, rgba(6,0,22,0.98) 100%)",
+            }}>
+              {/* Top accent bar */}
+              <div style={{ height: 3, background: "linear-gradient(90deg,#6200ea,#e040fb,#00f5ff)" }} />
+
+              <div style={{ padding: "28px 28px 24px", textAlign: "center" }}>
+                {/* "GAME OVER" label */}
+                <p style={{
+                  fontSize: 9, fontWeight: 800, letterSpacing: "0.45em",
+                  color: "rgba(255,80,100,0.7)", textTransform: "uppercase", marginBottom: 16,
+                }}>
+                  ✦ GAME OVER ✦
+                </p>
+
+                {/* Score — hero number */}
+                <div style={{ marginBottom: 6 }}>
+                  <div style={{
+                    fontSize: 52, fontWeight: 900, lineHeight: 1,
+                    background: "linear-gradient(135deg,#ffffff 30%,#c8aaff)",
+                    WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+                    letterSpacing: "-0.03em",
+                  }}>
+                    {score.toLocaleString()}
+                  </div>
+                  <div style={{ fontSize: 10, color: "rgba(255,255,255,0.25)", letterSpacing: "0.2em", marginTop: 2 }}>POINTS</div>
+                </div>
+
+                {/* New best badge */}
+                {isNewBest && (
+                  <div style={{
+                    display: "inline-block", marginBottom: 12,
+                    padding: "3px 12px", borderRadius: 20,
+                    background: "linear-gradient(90deg,rgba(255,215,0,0.15),rgba(255,140,0,0.15))",
+                    border: "1px solid rgba(255,215,0,0.4)",
+                    fontSize: 9, fontWeight: 800, letterSpacing: "0.25em",
+                    color: "#ffd700",
+                  }}>
+                    ★ NEW BEST
+                  </div>
+                )}
+
+                {/* Stats row */}
+                <div style={{
+                  display: "flex", justifyContent: "center", gap: 0,
+                  margin: "16px 0 22px",
+                  border: "1px solid rgba(255,255,255,0.07)",
+                  borderRadius: 12, overflow: "hidden",
+                }}>
+                  {[
+                    { label: "TURNS", value: turn, color: "#00f5ff" },
+                    { label: "BALLS", value: ballCount, color: "#00ff88" },
+                    { label: "BEST", value: hiScore.toLocaleString(), color: "#ffd700" },
+                  ].map((stat, i) => (
+                    <div key={i} style={{
+                      flex: 1, padding: "10px 0",
+                      background: "rgba(255,255,255,0.03)",
+                      borderRight: i < 2 ? "1px solid rgba(255,255,255,0.07)" : "none",
+                    }}>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: stat.color }}>{stat.value}</div>
+                      <div style={{ fontSize: 8, color: "rgba(255,255,255,0.28)", letterSpacing: "0.18em", marginTop: 1 }}>{stat.label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Play Again */}
+                <button
+                  onClick={restart}
+                  style={{
+                    display: "block", width: "100%",
+                    padding: "13px 0", marginBottom: 9,
+                    borderRadius: 12, border: "none", cursor: "pointer",
+                    fontSize: 13, fontWeight: 800, letterSpacing: "0.2em", textTransform: "uppercase",
+                    color: "#fff",
+                    background: "linear-gradient(135deg,#7c3aed,#db2777)",
+                    boxShadow: "0 4px 24px rgba(120,40,220,0.5), inset 0 1px 0 rgba(255,255,255,0.15)",
+                    transition: "opacity 0.15s",
+                  }}
+                  onMouseEnter={e => (e.currentTarget.style.opacity = "0.88")}
+                  onMouseLeave={e => (e.currentTarget.style.opacity = "1")}
+                >
+                  ↺ Play Again
+                </button>
+
+                {/* Home + Sound row */}
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button
+                    onClick={onHome}
+                    style={{
+                      flex: 1, padding: "10px 0",
+                      borderRadius: 10, cursor: "pointer",
+                      fontSize: 11, fontWeight: 600, color: "rgba(255,255,255,0.35)",
+                      background: "transparent",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                    }}
+                  >
+                    ← Home
+                  </button>
+                  <button
+                    onClick={toggleSound}
+                    style={{
+                      width: 44, padding: "10px 0",
+                      borderRadius: 10, cursor: "pointer",
+                      fontSize: 15, lineHeight: 1,
+                      background: "transparent",
+                      border: "1px solid rgba(255,255,255,0.1)",
+                      color: sound ? "rgba(255,255,255,0.6)" : "rgba(255,255,255,0.2)",
+                    }}
+                    title={sound ? "Mute" : "Unmute"}
+                  >
+                    {sound ? "🔊" : "🔇"}
+                  </button>
+                </div>
+              </div>
             </div>
           </div>
         )}
