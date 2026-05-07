@@ -449,40 +449,38 @@ export function BallsBricks({ onHome }: { onHome: () => void }) {
 
         ctx.save();
 
-        // Outer glow — double-pass for richness
-        ctx.shadowColor = brick.glow;
-        ctx.shadowBlur = 20;
-
-        // Body gradient — bright top, rich middle, not pitch-black at bottom
+        // ── Step 1: crisp body fill (NO shadowBlur — keeps edges sharp) ──
+        ctx.shadowBlur = 0;
         const grad = ctx.createLinearGradient(x, y, x, y + h);
-        grad.addColorStop(0, brick.glow + "99");      // vivid top highlight
-        grad.addColorStop(0.3, brick.color + "ff");   // full body color
-        grad.addColorStop(1, brick.color + "55");     // dark but not black
+        grad.addColorStop(0, brick.glow + "bb");      // vivid top
+        grad.addColorStop(0.3, brick.color);          // full body color
+        grad.addColorStop(1, brick.color + "66");     // slightly darkened bottom
         ctx.fillStyle = grad;
         ctx.beginPath();
         ctx.roundRect(x, y, w, h, 6);
         ctx.fill();
 
-        // Bright neon border
-        ctx.shadowBlur = 8;
+        // ── Step 2: neon border with glow (glow on stroke, not fill) ──
+        ctx.shadowColor = brick.glow;
+        ctx.shadowBlur = 18;
         ctx.strokeStyle = brick.glow;
         ctx.lineWidth = 1.5;
         ctx.stroke();
 
-        // Shine — brighter and taller
+        // ── Step 3: glass shine (crisp, no shadow) ──
+        ctx.shadowBlur = 0;
         ctx.save();
         ctx.clip();
-        const shine = ctx.createLinearGradient(x, y, x, y + h * 0.55);
-        shine.addColorStop(0, "rgba(255,255,255,0.42)");
-        shine.addColorStop(0.5, "rgba(255,255,255,0.12)");
+        const shine = ctx.createLinearGradient(x, y, x, y + h * 0.5);
+        shine.addColorStop(0, "rgba(255,255,255,0.40)");
+        shine.addColorStop(0.6, "rgba(255,255,255,0.08)");
         shine.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = shine;
-        ctx.fillRect(x, y, w, h * 0.55);
+        ctx.fillRect(x, y, w, h * 0.5);
         ctx.restore();
 
-        // HP label — bright white with subtle glow
-        ctx.shadowColor = "#fff";
-        ctx.shadowBlur = 6;
+        // ── Step 4: HP number — crisp white, no blur ──
+        ctx.shadowBlur = 0;
         ctx.fillStyle = "#fff";
         const fontSize = brick.hp >= 100 ? 12 : brick.hp >= 10 ? 15 : 19;
         ctx.font = `900 ${fontSize}px 'Inter', sans-serif`;
